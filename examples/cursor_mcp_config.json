@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "devops-mcp": {
+      "command": "python",
+      "args": ["-m", "devops_mcp.server_http"],
+      "env": {
+        "DEVOPS_MCP_CONFIG": "/path/to/config.json"
+      }
+    }
+  }
+}

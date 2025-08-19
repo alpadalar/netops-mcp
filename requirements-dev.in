@@ -1,0 +1,18 @@
+# Include base requirements
+-r requirements.in
+
+# Additional development tools
+pre-commit>=3.3.0
+tox>=4.6.0
+coverage>=7.2.0
+bandit>=1.7.0
+safety>=2.3.0
+
+# Documentation
+sphinx>=7.0.0
+sphinx-rtd-theme>=1.3.0
+myst-parser>=2.0.0
+
+# Type checking
+types-requests>=2.31.0
+types-psutil>=5.9.0

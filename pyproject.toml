@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netops-mcp"
+version = "0.1.0"
+description = "A Model Context Protocol server for Network Operations and infrastructure diagnostic tools"
+requires-python = ">=3.10"
+authors = [
+    {name = "Alperen Adalar", email = "alp.adalar@gmail.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+keywords = ["netops", "mcp", "network", "diagnostic", "system", "administration", "monitoring", "infrastructure"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Topic :: System :: Networking :: Monitoring",
+    "Topic :: System :: Networking :: Firewalls",
+]
+
+dependencies = [
+    "mcp @ git+https://github.com/modelcontextprotocol/python-sdk.git",
+    "requests>=2.31.0,<3.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "fastmcp>=0.2.0",
+    "asgiref>=3.7.0",
+    "psutil>=5.9.0,<6.0.0",
+    "dnspython>=2.4.0,<3.0.0",
+    "netifaces>=0.11.0,<1.0.0",
+    "python-nmap>=0.7.1,<1.0.0",
+    "httpx>=0.24.0,<1.0.0",
+    "rich>=13.0.0,<14.0.0",
+    "click>=8.1.0,<9.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<8.0.0",
+    "black>=23.0.0,<24.0.0",
+    "mypy>=1.0.0,<2.0.0",
+    "pytest-asyncio>=0.21.0,<0.22.0",
+    "ruff>=0.1.0,<0.2.0",
+    "types-requests>=2.31.0,<3.0.0",
+    "pytest-mock>=3.11.0,<4.0.0",
+    "pytest-cov>=4.0.0,<5.0.0",
+]
+django = [
+    "django>=4.0.0,<5.0.0",
+    "djangorestframework>=3.14.0",
+    "pyjwt>=2.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/alpadalar/NetOpsMCP"
+Documentation = "https://github.com/alpadalar/NetOpsMCP#readme"
+Repository = "https://github.com/alpadalar/NetOpsMCP.git"
+Issues = "https://github.com/alpadalar/NetOpsMCP/issues"
+
+[project.scripts]
+netops-mcp = "netops_mcp.server:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "--cov=src",
+    "--cov-report=html",
+    "--cov-report=term-missing"
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning:pydantic.*",
+    "ignore::FutureWarning",
+    "ignore::PendingDeprecationWarning"
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[tool.ruff]
+select = ["E", "F", "B", "I"]
+ignore = []
+line-length = 100
+target-version = "py39"
+
+[tool.black]
+line-length = 100
+target-version = ['py39']

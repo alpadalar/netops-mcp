@@ -1,0 +1,31 @@
+services:
+  netops-mcp:
+    build: .
+    container_name: NetOpsMCP
+    ports:
+      - "8815:8815"
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    environment:
+      - NETOPS_MCP_CONFIG=/app/config/config.json
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8815
+      - HTTP_PATH=/netops-mcp
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-s", "-f", "http://localhost:8815/netops-mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - netops-network
+    # Network diagnostic araçları için gerekli yetkiler
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+networks:
+  netops-network:
+    driver: bridge

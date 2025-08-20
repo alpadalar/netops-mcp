@@ -201,24 +201,54 @@ class NetOpsMCPHTTPServer:
         # System Tools
         @self.mcp.tool(description="Check required system tools")
         def check_required_tools():
-            tools = check_required_tools()
-            system_info = get_system_info()
-            
-            response_data = {
-                "tools": tools,
-                "system_info": system_info,
-                "missing_tools": [tool for tool, available in tools.items() if not available]
-            }
-            
-            return [{"type": "text", "text": json.dumps(response_data, indent=2)}]
+            try:
+                tools = check_required_tools()
+                system_info = get_system_info()
+                
+                response_data = {
+                    "tools": tools,
+                    "system_info": system_info,
+                    "missing_tools": [tool for tool, available in tools.items() if not available]
+                }
+                
+                return [{"type": "text", "text": json.dumps(response_data, indent=2)}]
+            except Exception as e:
+                return [{"type": "text", "text": json.dumps({"error": str(e)}, indent=2)}]
 
         @self.mcp.tool(description="Health check endpoint")
         def health():
+            # Count MCP tools (26 total)
+            mcp_tools = [
+                # HTTP/API Testing Tools (3)
+                "curl_request", "httpie_request", "api_test",
+                # Network Connectivity Tools (5)
+                "ping_host", "traceroute_path", "mtr_monitor", "telnet_connect", "netcat_test",
+                # DNS Tools (3)
+                "nslookup_query", "dig_query", "host_lookup",
+                # Network Discovery Tools (2)
+                "nmap_scan", "service_discovery",
+                # System Network Tools (4)
+                "ss_connections", "netstat_connections", "arp_table", "arping_host",
+                # System Monitoring Tools (5)
+                "system_status", "cpu_usage", "memory_usage", "disk_usage", "process_list",
+                # Security Tools (2)
+                "port_scan", "service_enumeration",
+                # System Tools (2)
+                "check_required_tools", "health"
+            ]
+            
+            # Count system tools
+            system_tools = check_required_tools()
+            available_system_tools = len(system_tools['available_tools'])
+            total_system_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
+            
             return [{"type": "text", "text": json.dumps({
                 "status": "ok",
                 "server": "NetOpsMCP-HTTP",
-                "tools_available": len([t for t, a in check_required_tools().items() if a]),
-                "total_tools": len(check_required_tools())
+                "mcp_tools": len(mcp_tools),
+                "system_tools_available": available_system_tools,
+                "system_tools_total": total_system_tools,
+                "total_tools": len(mcp_tools) + total_system_tools
             })}]
 
     def _setup_health_check(self):
@@ -233,15 +263,38 @@ class NetOpsMCPHTTPServer:
         # Create a simple health check function
         def update_health_status():
             try:
-                tools = check_required_tools()
-                available_tools = len([t for t, a in tools.items() if a])
-                total_tools = len(tools)
+                # Count MCP tools (26 total)
+                mcp_tools = [
+                    # HTTP/API Testing Tools (3)
+                    "curl_request", "httpie_request", "api_test",
+                    # Network Connectivity Tools (5)
+                    "ping_host", "traceroute_path", "mtr_monitor", "telnet_connect", "netcat_test",
+                    # DNS Tools (3)
+                    "nslookup_query", "dig_query", "host_lookup",
+                    # Network Discovery Tools (2)
+                    "nmap_scan", "service_discovery",
+                    # System Network Tools (4)
+                    "ss_connections", "netstat_connections", "arp_table", "arping_host",
+                    # System Monitoring Tools (5)
+                    "system_status", "cpu_usage", "memory_usage", "disk_usage", "process_list",
+                    # Security Tools (2)
+                    "port_scan", "service_enumeration",
+                    # System Tools (2)
+                    "check_required_tools", "health"
+                ]
+                
+                # Count system tools
+                system_tools = check_required_tools()
+                available_system_tools = len(system_tools['available_tools'])
+                total_system_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
                 
                 health_data = {
                     "status": "healthy",
                     "server": "NetOpsMCP-HTTP",
-                    "tools_available": available_tools,
-                    "total_tools": total_tools,
+                    "mcp_tools": len(mcp_tools),
+                    "system_tools_available": available_system_tools,
+                    "system_tools_total": total_system_tools,
+                    "total_tools": len(mcp_tools) + total_system_tools,
                     "timestamp": time.time()
                 }
                 

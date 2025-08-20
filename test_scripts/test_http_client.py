@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HTTP Client test script for DevOpsMCP.
+HTTP Client test script for NetOpsMCP.
 """
 
 import requests
@@ -10,7 +10,7 @@ import time
 
 def test_mcp_http_request(method, params=None):
     """Test MCP HTTP request."""
-    url = "http://localhost:8815/devops-mcp"
+    url = "http://localhost:8815/netops-mcp"
     
     headers = {
         "Content-Type": "application/json",
@@ -98,8 +98,8 @@ def test_ss_connections():
 
 def main():
     """Main test function."""
-    print("🚀 DevOpsMCP HTTP Client Testing")
-    print("📍 Server: http://localhost:8815/devops-mcp")
+    print("🚀 NetOpsMCP HTTP Client Testing")
+    print("📍 Server: http://localhost:8815/netops-mcp")
     print("=" * 60)
     
     tests = [

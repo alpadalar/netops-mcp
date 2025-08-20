@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test script for DevOpsMCP HTTP server.
+Test script for NetOpsMCP HTTP server.
 """
 
 import requests
@@ -150,9 +150,9 @@ def test_system_status_tool(base_url):
 
 def main():
     """Main test function."""
-    base_url = "http://localhost:8815/devops-mcp"
+    base_url = "http://localhost:8815/netops-mcp"
     
-    print("🚀 Starting DevOpsMCP HTTP Server Tests")
+    print("🚀 Starting NetOpsMCP HTTP Server Tests")
     print(f"📍 Server URL: {base_url}")
     print("-" * 50)
     

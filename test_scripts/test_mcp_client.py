@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP Client test script for DevOpsMCP.
+MCP Client test script for NetOpsMCP.
 """
 
 import asyncio
@@ -9,15 +9,15 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-async def test_devops_tools():
-    """Test DevOps tools via MCP."""
-    print("🚀 Testing DevOpsMCP Tools via MCP Client")
+async def test_netops_tools():
+    """Test NetOps tools via MCP."""
+    print("🚀 Testing NetOpsMCP Tools via MCP Client")
     print("-" * 50)
     
     # Connect to the server
     server_params = StdioServerParameters(
         command="python",
-        args=["-m", "devops_mcp.server"]
+        args=["-m", "netops_mcp.server"]
     )
     
     async with stdio_client(server_params) as (read, write):
@@ -74,22 +74,22 @@ async def test_devops_tools():
 
 async def test_http_server():
     """Test HTTP server via MCP."""
-    print("🚀 Testing DevOpsMCP HTTP Server")
+    print("🚀 Testing NetOpsMCP HTTP Server")
     print("-" * 50)
     
     # This would require a different approach for HTTP transport
     print("⚠️  HTTP transport testing requires different client implementation")
-    print("   The server is running on http://localhost:8815/devops-mcp")
+    print("   The server is running on http://localhost:8815/netops-mcp")
 
 
 def main():
     """Main function."""
-    print("🎯 DevOpsMCP Tool Testing")
+    print("🎯 NetOpsMCP Tool Testing")
     print("=" * 50)
     
     # Test stdio transport
     try:
-        asyncio.run(test_devops_tools())
+        asyncio.run(test_netops_tools())
     except Exception as e:
         print(f"❌ Stdio transport test failed: {e}")
     

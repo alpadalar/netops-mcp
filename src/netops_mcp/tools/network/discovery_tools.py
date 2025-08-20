@@ -1,14 +1,30 @@
 """
-Network discovery tools for DevOps MCP.
+Network discovery tools for NetOps MCP.
 """
 
+import re
 from typing import Dict, List, Optional
 from mcp.types import TextContent as Content
-from ..base import DevOpsTool
+from ..base import NetOpsTool
 
 
-class DiscoveryTools(DevOpsTool):
+class DiscoveryTools(NetOpsTool):
     """Tools for network discovery and scanning."""
+
+    def _validate_scan_type(self, scan_type: str) -> bool:
+        """Validate scan type.
+
+        Args:
+            scan_type: Scan type to validate
+
+        Returns:
+            True if scan type is valid
+        """
+        if not scan_type or not isinstance(scan_type, str):
+            return False
+        
+        valid_scan_types = ['basic', 'quick', 'full']
+        return scan_type.lower() in valid_scan_types
 
     def nmap_scan(self, target: str, ports: Optional[str] = None, scan_type: str = "basic", timeout: int = 300) -> List[Content]:
         """Scan network using nmap.
@@ -25,6 +41,9 @@ class DiscoveryTools(DevOpsTool):
         try:
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
+            
+            if not self._validate_scan_type(scan_type):
+                raise ValueError("Invalid scan type provided")
 
             # Build nmap command based on scan type
             if scan_type == "basic":

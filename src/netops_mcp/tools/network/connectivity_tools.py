@@ -1,14 +1,14 @@
 """
-Network connectivity testing tools for DevOps MCP.
+Network connectivity testing tools for NetOps MCP.
 """
 
 import re
 from typing import Dict, List, Optional
 from mcp.types import TextContent as Content
-from ..base import DevOpsTool
+from ..base import NetOpsTool
 
 
-class ConnectivityTools(DevOpsTool):
+class ConnectivityTools(NetOpsTool):
     """Tools for network connectivity testing."""
 
     def ping_host(self, host: str, count: int = 4, timeout: int = 10) -> List[Content]:

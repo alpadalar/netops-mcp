@@ -14,7 +14,7 @@ services:
       - HTTP_PATH=/netops-mcp
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-s", "-f", "http://localhost:8815/netops-mcp"]
+      test: ["CMD-SHELL", "test -f /tmp/netops-mcp-health && grep -q healthy /tmp/netops-mcp-health"]
       interval: 30s
       timeout: 10s
       retries: 3

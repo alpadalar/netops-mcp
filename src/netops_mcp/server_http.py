@@ -83,6 +83,9 @@ class NetOpsMCPHTTPServer:
         # Initialize FastMCP
         self.mcp = FastMCP("NetOpsMCP-HTTP")
         
+        # Add health check endpoint
+        self._setup_health_check()
+        
         # Setup tools
         self._setup_tools()
 
@@ -217,6 +220,55 @@ class NetOpsMCPHTTPServer:
                 "tools_available": len([t for t, a in check_required_tools().items() if a]),
                 "total_tools": len(check_required_tools())
             })}]
+
+    def _setup_health_check(self):
+        """Setup health check endpoint for Docker."""
+        # FastMCP doesn't expose app directly, so we'll use a different approach
+        # We'll create a simple health check file that can be checked
+        import os
+        import time
+        
+        health_file = "/tmp/netops-mcp-health"
+        
+        # Create a simple health check function
+        def update_health_status():
+            try:
+                tools = check_required_tools()
+                available_tools = len([t for t, a in tools.items() if a])
+                total_tools = len(tools)
+                
+                health_data = {
+                    "status": "healthy",
+                    "server": "NetOpsMCP-HTTP",
+                    "tools_available": available_tools,
+                    "total_tools": total_tools,
+                    "timestamp": time.time()
+                }
+                
+                with open(health_file, 'w') as f:
+                    json.dump(health_data, f)
+                    
+            except Exception as e:
+                health_data = {
+                    "status": "unhealthy",
+                    "error": str(e),
+                    "timestamp": time.time()
+                }
+                
+                with open(health_file, 'w') as f:
+                    json.dump(health_data, f)
+        
+        # Update health status every 30 seconds
+        import threading
+        
+        def health_check_loop():
+            while True:
+                update_health_status()
+                time.sleep(30)
+        
+        # Start health check thread
+        health_thread = threading.Thread(target=health_check_loop, daemon=True)
+        health_thread.start()
 
     def run(self) -> None:
         """

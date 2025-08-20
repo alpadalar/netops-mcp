@@ -1,13 +1,13 @@
 """
-Main server implementation for DevOps MCP.
+Main server implementation for NetOps MCP.
 
-This module implements the core MCP server for DevOps and network diagnostic tools, providing:
+This module implements the core MCP server for network operations and diagnostic tools, providing:
 - Configuration loading and validation
 - Logging setup
 - MCP tool registration and routing
 - Signal handling for graceful shutdown
 
-The server exposes a comprehensive set of tools for DevOps operations including:
+The server exposes a comprehensive set of tools for network operations including:
 - Network diagnostic tools (ping, traceroute, nmap, curl, etc.)
 - System administration tools (ss, netstat, arp, etc.)
 - Security tools (port scanning, service discovery)
@@ -38,8 +38,8 @@ from .tools.security.scanning_tools import ScanningTools
 from .utils.system_check import check_required_tools as check_tools_status, get_system_info
 
 
-class DevOpsMCPServer:
-    """Main server class for DevOps MCP."""
+class NetOpsMCPServer:
+    """Main server class for NetOps MCP."""
 
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the server.
@@ -66,7 +66,7 @@ class DevOpsMCPServer:
         self.scanning_tools = ScanningTools()
         
         # Initialize MCP server
-        self.mcp = FastMCP("DevOpsMCP")
+        self.mcp = FastMCP("NetOpsMCP")
         self._tests_passed: Optional[bool] = None
         self._setup_tools()
 
@@ -325,7 +325,7 @@ class DevOpsMCPServer:
                 else:
                     self.logger.info("Startup tests passed.")
 
-            self.logger.info("Starting DevOps MCP server...")
+            self.logger.info("Starting NetOps MCP server...")
             anyio.run(self.mcp.run_stdio_async)
         except Exception as e:
             self.logger.error(f"Server error: {e}")
@@ -336,7 +336,7 @@ def main():
     """Main entry point."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='DevOps MCP Server')
+    parser = argparse.ArgumentParser(description='NetOps MCP Server')
     parser.add_argument('--config', help='Configuration file path')
     parser.add_argument('--test', action='store_true', help='Run system tests and exit')
     
@@ -367,7 +367,7 @@ def main():
     
     try:
         config_path = args.config or os.getenv("NETOPS_MCP_CONFIG")
-        server = DevOpsMCPServer(config_path)
+        server = NetOpsMCPServer(config_path)
         server.start()
     except KeyboardInterrupt:
         print("\nShutting down gracefully...")

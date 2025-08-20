@@ -1,5 +1,5 @@
 """
-Logging configuration for the DevOps MCP server.
+Logging configuration for the NetOps MCP server.
 
 This module handles logging setup and configuration:
 - File and console logging handlers
@@ -21,7 +21,7 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
         config: Logging configuration
 
     Returns:
-        Configured logger instance for "devops-mcp"
+        Configured logger instance for "netops-mcp"
     """
     # Convert relative path to absolute
     log_file = config.file
@@ -59,5 +59,5 @@ def setup_logging(config: LoggingConfig) -> logging.Logger:
         root_logger.addHandler(handler)
     
     # Create and return server logger
-    logger = logging.getLogger("devops-mcp")
+    logger = logging.getLogger("netops-mcp")
     return logger

@@ -1,5 +1,5 @@
 """
-HTTP-based MCP server implementation for DevOpsMCP.
+HTTP-based MCP server implementation for NetOpsMCP.
 
 This module provides an HTTP transport layer for the MCP server,
 supporting both regular HTTP and streamable HTTP transports.
@@ -34,16 +34,16 @@ from .tools.security.scanning_tools import ScanningTools
 from .utils.system_check import check_required_tools, get_system_info
 
 
-logger = logging.getLogger("devops-mcp.http")
+logger = logging.getLogger("netops-mcp.http")
 
 
-class DevOpsMCPHTTPServer:
+class NetOpsMCPHTTPServer:
     """
-    HTTP-based MCP server for DevOps tools.
+    HTTP-based MCP server for network operations tools.
     
     This server supports:
     - Streamable HTTP transport
-    - Comprehensive DevOps toolset
+    - Comprehensive network operations toolset
     - Real-time network diagnostics
     - System monitoring capabilities
     """
@@ -52,7 +52,7 @@ class DevOpsMCPHTTPServer:
                  config_path: Optional[str] = None,
                  host: str = "0.0.0.0",
                  port: int = 8815,
-                 path: str = "/devops-mcp"):
+                 path: str = "/netops-mcp"):
         """
         Initialize the HTTP MCP server.
         
@@ -81,7 +81,7 @@ class DevOpsMCPHTTPServer:
         self.scanning_tools = ScanningTools()
         
         # Initialize FastMCP
-        self.mcp = FastMCP("DevOpsMCP-HTTP")
+        self.mcp = FastMCP("NetOpsMCP-HTTP")
         
         # Setup tools
         self._setup_tools()
@@ -213,7 +213,7 @@ class DevOpsMCPHTTPServer:
         def health():
             return [{"type": "text", "text": json.dumps({
                 "status": "ok",
-                "server": "DevOpsMCP-HTTP",
+                "server": "NetOpsMCP-HTTP",
                 "tools_available": len([t for t, a in check_required_tools().items() if a]),
                 "total_tools": len(check_required_tools())
             })}]
@@ -234,7 +234,7 @@ class DevOpsMCPHTTPServer:
         signal.signal(signal.SIGTERM, signal_handler)
 
         try:
-            self.logger.info(f"Starting DevOpsMCP HTTP server on {self.host}:{self.port}{self.path}")
+            self.logger.info(f"Starting NetOpsMCP HTTP server on {self.host}:{self.port}{self.path}")
             
             # Run with FastMCP's built-in HTTP transport
             self.mcp.run(
@@ -252,16 +252,16 @@ def main():
     """Main entry point for standalone execution."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='DevOpsMCP HTTP Server')
+    parser = argparse.ArgumentParser(description='NetOpsMCP HTTP Server')
     parser.add_argument('--host', default='0.0.0.0', help='Server host (default: 0.0.0.0)')
     parser.add_argument('--port', type=int, default=8815, help='Server port (default: 8815)')
-    parser.add_argument('--path', default='/devops-mcp', help='HTTP path (default: /devops-mcp)')
+    parser.add_argument('--path', default='/netops-mcp', help='HTTP path (default: /netops-mcp)')
     parser.add_argument('--config', help='Configuration file path')
     
     args = parser.parse_args()
     
     try:
-        server = DevOpsMCPHTTPServer(
+        server = NetOpsMCPHTTPServer(
             config_path=args.config,
             host=args.host,
             port=args.port,

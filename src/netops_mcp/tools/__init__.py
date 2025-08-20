@@ -1,5 +1,5 @@
 """
-MCP tools for DevOps and network diagnostic operations.
+MCP tools for network operations and diagnostic operations.
 """
 
 __all__ = []

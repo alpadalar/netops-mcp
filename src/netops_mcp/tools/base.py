@@ -1,7 +1,7 @@
 """
-Base classes and utilities for DevOps MCP tools.
+Base classes and utilities for NetOps MCP tools.
 
-This module provides the foundation for all DevOps MCP tools, including:
+This module provides the foundation for all NetOps MCP tools, including:
 - Base tool class with common functionality
 - Response formatting utilities
 - Error handling mechanisms
@@ -14,10 +14,10 @@ from typing import Any, Dict, List, Optional, Union
 from mcp.types import TextContent as Content
 
 
-class DevOpsTool:
-    """Base class for DevOps MCP tools.
+class NetOpsTool:
+    """Base class for NetOps MCP tools.
     
-    This class provides common functionality used by all DevOps tool implementations:
+    This class provides common functionality used by all NetOps tool implementations:
     - Standardized logging
     - Response formatting
     - Error handling
@@ -26,7 +26,7 @@ class DevOpsTool:
 
     def __init__(self):
         """Initialize the tool."""
-        self.logger = logging.getLogger(f"devops-mcp.{self.__class__.__name__.lower()}")
+        self.logger = logging.getLogger(f"netops-mcp.{self.__class__.__name__.lower()}")
 
     def _format_response(self, data: Any, tool_name: Optional[str] = None) -> List[Content]:
         """Format response data into MCP content.
@@ -148,8 +148,22 @@ class DevOpsTool:
         if not host or not isinstance(host, str):
             return False
         
-        # Basic validation - could be enhanced with regex
-        return len(host.strip()) > 0
+        host = host.strip()
+        if len(host) == 0:
+            return False
+        
+        # Check for invalid patterns
+        if '..' in host or ' ' in host:
+            return False
+        
+        # Basic domain/IP validation
+        import re
+        # IP address pattern
+        ip_pattern = re.compile(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
+        # Domain pattern
+        domain_pattern = re.compile(r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$')
+        
+        return bool(ip_pattern.match(host) or domain_pattern.match(host))
 
     def _validate_port(self, port: Union[int, str]) -> bool:
         """Validate port parameter.

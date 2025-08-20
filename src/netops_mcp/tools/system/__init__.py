@@ -1,5 +1,5 @@
 """
-System administration tools for DevOps MCP.
+System administration tools for NetOps MCP.
 """
 
 from .network_tools import NetworkTools

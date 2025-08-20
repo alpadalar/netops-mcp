@@ -1,5 +1,5 @@
 """
-Network diagnostic tools for DevOps MCP.
+Network diagnostic tools for NetOps MCP.
 """
 
 from .http_tools import HTTPTools

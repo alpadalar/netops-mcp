@@ -1,5 +1,5 @@
 """
-Security tools for DevOps MCP.
+Security tools for NetOps MCP.
 """
 
 from .scanning_tools import ScanningTools

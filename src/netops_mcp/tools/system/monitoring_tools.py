@@ -1,14 +1,14 @@
 """
-System monitoring tools for DevOps MCP.
+System monitoring tools for NetOps MCP.
 """
 
 import psutil
 from typing import Dict, List, Optional
 from mcp.types import TextContent as Content
-from ..base import DevOpsTool
+from ..base import NetOpsTool
 
 
-class MonitoringTools(DevOpsTool):
+class MonitoringTools(NetOpsTool):
     """Tools for system monitoring and resource usage."""
 
     def system_status(self) -> List[Content]:

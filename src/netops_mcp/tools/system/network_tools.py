@@ -1,13 +1,13 @@
 """
-System network tools for DevOps MCP.
+System network tools for NetOps MCP.
 """
 
 from typing import Dict, List, Optional
 from mcp.types import TextContent as Content
-from ..base import DevOpsTool
+from ..base import NetOpsTool
 
 
-class NetworkTools(DevOpsTool):
+class NetworkTools(NetOpsTool):
     """Tools for system network analysis."""
 
     def ss_connections(self, state: Optional[str] = None, protocol: Optional[str] = None) -> List[Content]:

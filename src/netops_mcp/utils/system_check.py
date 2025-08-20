@@ -67,6 +67,21 @@ def is_tool_available(tool_name: str) -> bool:
         elif tool_name == 'ping':
             result = subprocess.run(['ping', '-V'], 
                                   capture_output=True, text=True, timeout=5)
+        elif tool_name == 'nc':
+            result = subprocess.run(['nc', '-h'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'nslookup':
+            result = subprocess.run(['nslookup', '-version'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'dig':
+            result = subprocess.run(['dig', '-v'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'host':
+            result = subprocess.run(['host', '-V'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'arping':
+            result = subprocess.run(['arping', '-V'], 
+                                  capture_output=True, text=True, timeout=5)
         else:
             result = subprocess.run([tool_name, '--version'], 
                                   capture_output=True, text=True, timeout=5)
@@ -94,6 +109,21 @@ def get_tool_version(tool_name: str) -> str:
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'ping':
             result = subprocess.run(['ping', '-V'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'nc':
+            result = subprocess.run(['nc', '-h'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'nslookup':
+            result = subprocess.run(['nslookup', '-version'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'dig':
+            result = subprocess.run(['dig', '-v'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'host':
+            result = subprocess.run(['host', '-V'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'arping':
+            result = subprocess.run(['arping', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         else:
             result = subprocess.run([tool_name, '--version'], 

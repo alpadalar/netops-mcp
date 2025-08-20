@@ -24,7 +24,15 @@ class NetworkTools(NetOpsTool):
             command = ['ss', '-tuln']
             
             if state:
-                command.extend(['-o', f'state {state}'])
+                # Use proper ss state filtering
+                if state.lower() == 'listen':
+                    command = ['ss', '-tuln', '-l']
+                elif state.lower() == 'established':
+                    command = ['ss', '-tuln', '-o', 'state established']
+                elif state.lower() == 'time_wait':
+                    command = ['ss', '-tuln', '-o', 'state time-wait']
+                elif state.lower() == 'close_wait':
+                    command = ['ss', '-tuln', '-o', 'state close-wait']
             
             if protocol:
                 if protocol.lower() == 'tcp':

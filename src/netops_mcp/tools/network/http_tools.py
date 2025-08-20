@@ -244,7 +244,7 @@ class HTTPTools(NetOpsTool):
             if not self._validate_method(method):
                 raise ValueError("Invalid HTTP method provided")
 
-            # Use curl for API testing
+            # Use curl for API testing with proper output handling
             command = ['curl', '-s', '-w', '%{http_code}', '-o', '/tmp/api_response', '-X', method, url]
             
             # Add headers

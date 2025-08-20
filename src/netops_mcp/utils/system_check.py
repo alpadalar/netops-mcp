@@ -1,5 +1,5 @@
 """
-System check utilities for DevOps MCP server.
+System check utilities for NetOps MCP server.
 
 This module provides utilities for checking system requirements and
 required tools availability.
@@ -7,42 +7,85 @@ required tools availability.
 
 import subprocess
 import shutil
-from typing import Dict, List, Tuple
+import platform
+import psutil
+from typing import Dict, List, Tuple, Any
+
+# Required tools for the MCP server
+REQUIRED_TOOLS = [
+    'curl', 'ping', 'traceroute', 'mtr', 'telnet', 'nc',
+    'nmap', 'netstat', 'ss', 'nslookup', 'dig', 'host',
+    'arp', 'arping', 'httpie'
+]
 
 
-def check_required_tools() -> Dict[str, bool]:
+def check_required_tools(tools: List[str] = None) -> Dict[str, Any]:
     """Check if required system tools are available.
 
+    Args:
+        tools: List of tools to check. If None, uses REQUIRED_TOOLS.
+
     Returns:
-        Dictionary mapping tool names to availability status
+        Dictionary with availability status and lists of available/missing tools
     """
-    required_tools = [
-        'curl', 'ping', 'traceroute', 'mtr', 'telnet', 'nc',
-        'nmap', 'netstat', 'ss', 'nslookup', 'dig', 'host',
-        'arp', 'arping', 'httpie'
-    ]
+    if tools is None:
+        tools = REQUIRED_TOOLS
     
-    results = {}
-    for tool in required_tools:
-        results[tool] = shutil.which(tool) is not None
+    available_tools = []
+    missing_tools = []
     
-    return results
+    for tool in tools:
+        if is_tool_available(tool):
+            available_tools.append(tool)
+        else:
+            missing_tools.append(tool)
+    
+    return {
+        'all_available': len(missing_tools) == 0,
+        'available_tools': available_tools,
+        'missing_tools': missing_tools
+    }
 
 
-def check_tool_version(tool_name: str) -> Tuple[bool, str]:
-    """Check if a specific tool is available and get its version.
+def is_tool_available(tool_name: str) -> bool:
+    """Check if a specific tool is available.
 
     Args:
         tool_name: Name of the tool to check
 
     Returns:
-        Tuple of (available, version_info)
+        True if tool is available, False otherwise
     """
-    if not shutil.which(tool_name):
-        return False, "Tool not found"
-    
     try:
-        # Try to get version information
+        # Try to get version information to check availability
+        if tool_name == 'curl':
+            result = subprocess.run(['curl', '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'nmap':
+            result = subprocess.run(['nmap', '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'ping':
+            result = subprocess.run(['ping', '-V'], 
+                                  capture_output=True, text=True, timeout=5)
+        else:
+            result = subprocess.run([tool_name, '--version'], 
+                                  capture_output=True, text=True, timeout=5)
+        
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, subprocess.SubprocessError):
+        return False
+
+
+def get_tool_version(tool_name: str) -> str:
+    """Get version information for a specific tool.
+
+    Args:
+        tool_name: Name of the tool to get version for
+
+    Returns:
+        Version string or "Unknown" if not available
+    """
+    try:
         if tool_name == 'curl':
             result = subprocess.run(['curl', '--version'], 
                                   capture_output=True, text=True, timeout=5)
@@ -58,33 +101,157 @@ def check_tool_version(tool_name: str) -> Tuple[bool, str]:
         
         if result.returncode == 0:
             version_line = result.stdout.split('\n')[0]
-            return True, version_line
+            return version_line
         else:
-            return True, "Version unknown"
-            
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-        return True, "Version check failed"
+            return "Unknown"
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, subprocess.SubprocessError):
+        return "Unknown"
 
 
-def get_system_info() -> Dict[str, str]:
+def check_tool_version(tool_name: str) -> Tuple[bool, str]:
+    """Check if a specific tool is available and get its version.
+
+    Args:
+        tool_name: Name of the tool to check
+
+    Returns:
+        Tuple of (available, version_info)
+    """
+    available = is_tool_available(tool_name)
+    version = get_tool_version(tool_name) if available else "Tool not found"
+    return available, version
+
+
+def get_system_info() -> Dict[str, Any]:
     """Get basic system information.
 
     Returns:
         Dictionary containing system information
     """
-    import platform
-    import psutil
+    try:
+        cpu_count = psutil.cpu_count()
+    except Exception:
+        cpu_count = "Unknown"
+    
+    try:
+        memory_total = psutil.virtual_memory().total
+    except Exception:
+        memory_total = "Unknown"
     
     info = {
         'platform': platform.system(),
-        'platform_version': platform.version(),
-        'architecture': platform.machine(),
         'python_version': platform.python_version(),
-        'cpu_count': str(psutil.cpu_count()),
-        'memory_total': f"{psutil.virtual_memory().total // (1024**3)} GB"
+        'architecture': platform.machine(),
+        'hostname': platform.node(),
+        'cpu_count': cpu_count,
+        'memory_total': memory_total
     }
     
     return info
+
+
+def validate_system_requirements() -> Dict[str, Any]:
+    """Validate system requirements for the MCP server.
+
+    Returns:
+        Dictionary with validation results
+    """
+    tools_check = check_required_tools()
+    system_info = get_system_info()
+    
+    return {
+        'valid': tools_check['all_available'],
+        'missing_tools': tools_check['missing_tools'],
+        'system_info': system_info
+    }
+
+
+def get_network_interfaces() -> Dict[str, List[Dict[str, str]]]:
+    """Get network interfaces information.
+
+    Returns:
+        Dictionary mapping interface names to their addresses
+    """
+    try:
+        interfaces = {}
+        for interface, addrs in psutil.net_if_addrs().items():
+            interfaces[interface] = []
+            for addr in addrs:
+                interfaces[interface].append({
+                    'family': str(addr.family),
+                    'address': addr.address,
+                    'netmask': addr.netmask
+                })
+        return interfaces
+    except Exception:
+        return {}
+
+
+def get_disk_usage(path: str = '/') -> Dict[str, int]:
+    """Get disk usage information for a path.
+
+    Args:
+        path: Path to check disk usage for
+
+    Returns:
+        Dictionary with disk usage information
+    """
+    try:
+        usage = psutil.disk_usage(path)
+        return {
+            'total': usage.total,
+            'used': usage.used,
+            'free': usage.free,
+            'percent': usage.percent
+        }
+    except Exception:
+        return {
+            'total': 0,
+            'used': 0,
+            'free': 0,
+            'percent': 0.0
+        }
+
+
+def get_memory_info() -> Dict[str, int]:
+    """Get memory information.
+
+    Returns:
+        Dictionary with memory information
+    """
+    try:
+        memory = psutil.virtual_memory()
+        return {
+            'total': memory.total,
+            'available': memory.available,
+            'used': memory.used,
+            'percent': memory.percent
+        }
+    except Exception:
+        return {
+            'total': 0,
+            'available': 0,
+            'used': 0,
+            'percent': 0.0
+        }
+
+
+def get_cpu_info() -> Dict[str, Any]:
+    """Get CPU information.
+
+    Returns:
+        Dictionary with CPU information
+    """
+    try:
+        return {
+            'count': psutil.cpu_count(),
+            'usage_percent': psutil.cpu_percent(interval=1)
+        }
+    except Exception:
+        return {
+            'count': 0,
+            'usage_percent': 0.0
+        }
 
 
 def validate_network_access(host: str = "8.8.8.8") -> bool:

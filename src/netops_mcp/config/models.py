@@ -1,5 +1,5 @@
 """
-Configuration models for the DevOps MCP server.
+Configuration models for the NetOps MCP server.
 
 This module defines Pydantic models for configuration validation:
 - Server settings

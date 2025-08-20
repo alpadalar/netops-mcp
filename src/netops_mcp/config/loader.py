@@ -1,5 +1,5 @@
 """
-Configuration loading utilities for the DevOps MCP server.
+Configuration loading utilities for the NetOps MCP server.
 
 This module handles loading and validation of server configuration:
 - JSON configuration file loading

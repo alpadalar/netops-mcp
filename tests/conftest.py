@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for DevOps MCP tests.
+Pytest configuration and fixtures for NetOps MCP tests.
 """
 
 import pytest
@@ -13,7 +13,7 @@ from typing import Dict, Any
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from netops_mcp.tools.base import DevOpsTool
+from netops_mcp.tools.base import NetOpsTool
 from netops_mcp.tools.network.http_tools import HTTPTools
 from netops_mcp.tools.network.connectivity_tools import ConnectivityTools
 from netops_mcp.tools.network.dns_tools import DNSTools
@@ -26,7 +26,7 @@ from netops_mcp.tools.security.scanning_tools import ScanningTools
 @pytest.fixture
 def mock_execute_command():
     """Mock _execute_command method for testing."""
-    with patch.object(DevOpsTool, '_execute_command') as mock:
+    with patch.object(NetOpsTool, '_execute_command') as mock:
         yield mock
 
 

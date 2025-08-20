@@ -1,5 +1,5 @@
 """
-Basic tests for DevOps MCP.
+Basic tests for NetOps MCP.
 """
 
 import pytest
@@ -7,22 +7,22 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from netops_mcp.tools.base import DevOpsTool
+from netops_mcp.tools.base import NetOpsTool
 from netops_mcp.utils.system_check import check_required_tools
 
 
-class TestDevOpsTool:
-    """Test base DevOpsTool class."""
+class TestNetOpsTool:
+    """Test base NetOpsTool class."""
 
-    def test_devops_tool_initialization(self):
-        """Test DevOpsTool initialization."""
-        tool = DevOpsTool()
+    def test_netops_tool_initialization(self):
+        """Test NetOpsTool initialization."""
+        tool = NetOpsTool()
         assert tool is not None
         assert hasattr(tool, 'logger')
 
     def test_validate_host(self):
         """Test host validation."""
-        tool = DevOpsTool()
+        tool = NetOpsTool()
         
         # Valid hosts
         assert tool._validate_host("google.com") == True
@@ -35,7 +35,7 @@ class TestDevOpsTool:
 
     def test_validate_port(self):
         """Test port validation."""
-        tool = DevOpsTool()
+        tool = NetOpsTool()
         
         # Valid ports
         assert tool._validate_port(80) == True
@@ -54,16 +54,20 @@ class TestSystemCheck:
 
     def test_check_required_tools(self):
         """Test required tools check."""
-        tools = check_required_tools()
+        result = check_required_tools()
         
-        assert isinstance(tools, dict)
-        assert "curl" in tools
-        assert "ping" in tools
-        assert "nmap" in tools
+        assert isinstance(result, dict)
+        assert "available_tools" in result
+        assert "missing_tools" in result
+        assert "all_available" in result
+        assert "curl" in result["available_tools"] or "curl" in result["missing_tools"]
+        assert "ping" in result["available_tools"] or "ping" in result["missing_tools"]
+        assert "nmap" in result["available_tools"] or "nmap" in result["missing_tools"]
         
-        # Check that all values are boolean
-        for tool, available in tools.items():
-            assert isinstance(available, bool)
+        # Check that all values are lists
+        assert isinstance(result["available_tools"], list)
+        assert isinstance(result["missing_tools"], list)
+        assert isinstance(result["all_available"], bool)
 
 
 def test_imports():

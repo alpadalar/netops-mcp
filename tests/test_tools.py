@@ -1,5 +1,5 @@
 """
-Tests for DevOps MCP tools.
+Tests for NetOps MCP tools.
 """
 
 import pytest
@@ -170,12 +170,15 @@ class TestSystemCheck:
 
     def test_check_required_tools(self):
         """Test required tools check."""
-        tools = check_required_tools()
+        result = check_required_tools()
         
-        assert isinstance(tools, dict)
-        assert "curl" in tools
-        assert "ping" in tools
-        assert "nmap" in tools
+        assert isinstance(result, dict)
+        assert "available_tools" in result
+        assert "missing_tools" in result
+        assert "all_available" in result
+        assert "curl" in result["available_tools"] or "curl" in result["missing_tools"]
+        assert "ping" in result["available_tools"] or "ping" in result["missing_tools"]
+        assert "nmap" in result["available_tools"] or "nmap" in result["missing_tools"]
 
     def test_get_system_info(self):
         """Test system info retrieval."""

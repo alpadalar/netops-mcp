@@ -110,7 +110,7 @@ docker run -p 8815:8815 netopsmcp
 
 ```bash
 # Using Python directly
-python -m src.devops_mcp.server_http --host 0.0.0.0 --port 8815
+python -m netops_mcp.server_http --host 0.0.0.0 --port 8815
 
 # Using Docker
 docker compose up -d
@@ -123,7 +123,7 @@ docker compose up -d
 
 ```bash
 # Health check
-curl http://localhost:8815/devops-mcp/health
+curl http://localhost:8815/netops-mcp/health
 
 # Test system requirements
 curl -X POST http://localhost:8815/netops-mcp \
@@ -304,9 +304,9 @@ The test suite covers:
 
 ```bash
 # Server configuration
-DEVOPSCP_HOST=0.0.0.0
-DEVOPSCP_PORT=8815
-DEVOPSCP_LOG_LEVEL=INFO
+NETOPS_MCP_HOST=0.0.0.0
+NETOPS_MCP_PORT=8815
+NETOPS_MCP_LOG_LEVEL=INFO
 
 # Tool timeouts
 PING_TIMEOUT=10
@@ -356,8 +356,8 @@ services:
     ports:
       - "8815:8815"
     environment:
-      - NETOPSCP_HOST=0.0.0.0
-      - NETOPSCP_PORT=8815
+      - NETOPS_MCP_HOST=0.0.0.0
+      - NETOPS_MCP_PORT=8815
     volumes:
       - ./logs:/app/logs
       - ./config:/app/config
@@ -394,7 +394,7 @@ docker run -d \
 
 ### Log Files
 
-- `logs/netopsmcp.log`: Main application log
+- `logs/netops-mcp.log`: Main application log
 - `logs/access.log`: HTTP access log
 - `logs/error.log`: Error log
 

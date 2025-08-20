@@ -110,7 +110,7 @@ docker run -p 8815:8815 netopsmcp
 
 ```bash
 # Python ile doğrudan
-python -m src.devops_mcp.server_http --host 0.0.0.0 --port 8815
+python -m netops_mcp.server_http --host 0.0.0.0 --port 8815
 
 # Docker ile
 docker compose up -d
@@ -123,10 +123,10 @@ docker compose up -d
 
 ```bash
 # Sağlık kontrolü
-curl http://localhost:8815/devops-mcp/health
+curl http://localhost:8815/netops-mcp/health
 
 # Sistem gereksinimlerini test et
-curl -X POST http://localhost:8815/devops-mcp \
+curl -X POST http://localhost:8815/netops-mcp \
   -H "Content-Type: application/json" \
   -d '{"method": "check_required_tools", "params": {}}'
 ```
@@ -304,9 +304,9 @@ Test paketi şunları kapsar:
 
 ```bash
 # Sunucu yapılandırması
-DEVOPSCP_HOST=0.0.0.0
-DEVOPSCP_PORT=8815
-DEVOPSCP_LOG_LEVEL=INFO
+NETOPS_MCP_HOST=0.0.0.0
+NETOPS_MCP_PORT=8815
+NETOPS_MCP_LOG_LEVEL=INFO
 
 # Araç zaman aşımları
 PING_TIMEOUT=10
@@ -351,18 +351,18 @@ NMAP_TIMEOUT=300
 ```yaml
 version: '3.8'
 services:
-  devopsmcp:
+  netopsmcp:
     build: .
     ports:
       - "8815:8815"
     environment:
-      - DEVOPSCP_HOST=0.0.0.0
-      - DEVOPSCP_PORT=8815
+      - NETOPS_MCP_HOST=0.0.0.0
+      - NETOPS_MCP_PORT=8815
     volumes:
       - ./logs:/app/logs
       - ./config:/app/config
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8815/devops-mcp/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8815/netops-mcp/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -372,15 +372,15 @@ services:
 
 ```bash
 # Image build et
-docker build -t devopsmcp .
+docker build -t netopsmcp .
 
 # Container çalıştır
 docker run -d \
-  --name devopsmcp \
+  --name netopsmcp \
   -p 8815:8815 \
   -v $(pwd)/logs:/app/logs \
   -v $(pwd)/config:/app/config \
-  devopsmcp
+  netopsmcp
 ```
 
 ## 📊 İzleme ve Günlük
@@ -394,7 +394,7 @@ docker run -d \
 
 ### Günlük Dosyaları
 
-- `logs/devopsmcp.log`: Ana uygulama günlüğü
+- `logs/netops-mcp.log`: Ana uygulama günlüğü
 - `logs/access.log`: HTTP erişim günlüğü
 - `logs/error.log`: Hata günlüğü
 
@@ -402,10 +402,10 @@ docker run -d \
 
 ```bash
 # Sunucu sağlığını kontrol et
-curl http://localhost:8815/devops-mcp/health
+curl http://localhost:8815/netops-mcp/health
 
 # Sistem gereksinimlerini kontrol et
-curl -X POST http://localhost:8815/devops-mcp \
+curl -X POST http://localhost:8815/netops-mcp \
   -H "Content-Type: application/json" \
   -d '{"method": "check_required_tools", "params": {}}'
 ```
@@ -438,7 +438,7 @@ curl -X POST http://localhost:8815/devops-mcp \
 ```bash
 # Depoyu klonla
 git clone <repository-url>
-cd DevOpsMCP
+cd NetOpsMCP
 
 # Geliştirme bağımlılıklarını kur
 uv pip install -e ".[dev]"

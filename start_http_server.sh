@@ -25,10 +25,16 @@ echo -e "${YELLOW}Config: ${CONFIG}${NC}"
 
 # Check if config file exists
 if [ ! -f "$CONFIG" ]; then
-    echo -e "${RED}❌ Config file not found: $CONFIG${NC}"
+    echo -e "${YELLOW}⚠️  Config file not found: $CONFIG${NC}"
     echo -e "${YELLOW}Creating default config...${NC}"
     mkdir -p config
-    cp config/config.example.json "$CONFIG"
+    if [ -f "config/config.example.json" ]; then
+        cp config/config.example.json "$CONFIG"
+        echo -e "${GREEN}✅ Config file created from example${NC}"
+    else
+        echo -e "${RED}❌ Config example file not found${NC}"
+        exit 1
+    fi
 fi
 
 # Check if logs directory exists

@@ -1,7 +1,10 @@
 services:
   netops-mcp:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: NetOpsMCP
+    image: netops-mcp:latest
     ports:
       - "8815:8815"
     volumes:
@@ -14,18 +17,38 @@ services:
       - HTTP_PATH=/netops-mcp
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/netops-mcp-health && grep -q healthy /tmp/netops-mcp-health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8815/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
     networks:
       - netops-network
     # Network diagnostic araçları için gerekli yetkiler
-    privileged: true
+    # Not: privileged yerine specific capabilities kullanıyoruz (daha güvenli)
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    # Resource limits (production deployment için önemli)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    # Read-only root filesystem (logs ve config hariç)
+    read_only: false  # Network tools bazı temp file'lar kullanır
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100M
 
 networks:
   netops-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

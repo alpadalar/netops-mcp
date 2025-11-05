@@ -431,6 +431,96 @@ curl -X POST http://localhost:8815/netops-mcp \
 - **Zaman Aşımı Yönetimi**: Tüm işlemler için yapılandırılabilir zaman aşımları
 - **Kaynak Limitleri**: Yerleşik kaynak kullanım limitleri
 
+## 🚀 Production Deployment
+
+### Hızlı Production Kurulumu
+
+1. **API Anahtarları Oluştur**:
+   ```bash
+   python scripts/generate_api_key.py -n 2 --config config/config.json
+   ```
+
+2. **Güvenliği Yapılandır** (`config/config.json`):
+   ```json
+   {
+     "security": {
+       "require_auth": true,
+       "api_keys": ["oluşturduğunuz-anahtar-buraya"],
+       "rate_limit_requests": 100,
+       "rate_limit_window": 60
+     }
+   }
+   ```
+
+3. **Docker Compose ile Deploy Et**:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Deployment'ı Doğrula**:
+   ```bash
+   curl http://localhost:8815/health
+   ```
+
+### Kimlik Doğrulama
+
+Sunucu, güvenli erişim için API key authentication'ı destekler:
+
+```bash
+# Kimlik doğrulamalı istek yap
+curl -X POST http://localhost:8815/netops-mcp \
+  -H "Authorization: Bearer API_ANAHTARINIZ" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "ping_host", "params": {"host": "google.com"}}'
+```
+
+### HTTPS Kurulumu (Önerilen)
+
+HTTPS için bir reverse proxy (nginx veya Caddy) kullanın:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name domain-adiniz.com;
+    
+    ssl_certificate /cert/yolu.pem;
+    ssl_certificate_key /key/yolu.pem;
+    
+    location / {
+        proxy_pass http://localhost:8815;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Production Özellikleri
+
+- ✅ **API Key Authentication**: Bearer token ile güvenli erişim kontrolü
+- ✅ **Rate Limiting**: Yerleşik hız sınırlama (varsayılan 100 istek/dakika)
+- ✅ **Input Validation**: Kapsamlı girdi sanitizasyonu
+- ✅ **Structured Logging**: Production ortamlar için JSON loglama
+- ✅ **Health Checks**: Yerleşik sağlık kontrolü endpoint'leri
+- ✅ **Docker Desteği**: Multi-stage build ile production-ready Docker image
+- ✅ **Non-Root User**: Container'da ayrıcalıksız kullanıcı olarak çalışır
+- ✅ **Resource Limits**: Yapılandırılabilir CPU ve bellek limitleri
+- ✅ **CORS Desteği**: Web uygulamaları için yapılandırılabilir CORS
+- ✅ **Security Headers**: Otomatik güvenlik header'ları
+
+### CI/CD Pipeline
+
+Dahil edilen GitHub Actions workflow'ları:
+- **Tests**: Python 3.10, 3.11, 3.12'de otomatik test
+- **Linting**: Kod kalitesi kontrolleri (Black, Ruff, mypy)
+- **Security**: Güvenlik taraması (Bandit, Safety, Trivy)
+- **Release**: GitHub Container Registry'ye otomatik Docker image yayınlama
+
+### Dokümantasyon
+
+- 📖 [Production Deployment Kılavuzu](docs/PRODUCTION_DEPLOYMENT.md) (İngilizce)
+- 🔐 [API Authentication Kılavuzu](docs/API_AUTHENTICATION.md) (İngilizce)
+- 🛡️ [Güvenlik Politikası](SECURITY.md) (İngilizce)
+
 ## 🤝 Katkıda Bulunma
 
 ### Geliştirme Kurulumu

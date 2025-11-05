@@ -69,20 +69,20 @@ httpie (optional, for enhanced HTTP testing)
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/alpadalar/NetOpsMCP.git
 cd NetOpsMCP
 
 # Install dependencies using uv
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e ".[dev]"
+uv pip install -e .
 ```
 
 ### Using pip
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/alpadalar/NetOpsMCP.git
 cd NetOpsMCP
 
 # Create virtual environment
@@ -90,7 +90,7 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ### Using Docker
@@ -123,7 +123,7 @@ docker compose up -d
 
 ```bash
 # Health check
-curl http://localhost:8815/netops-mcp/health
+curl http://localhost:8815/health
 
 # Test system requirements
 curl -X POST http://localhost:8815/netops-mcp \
@@ -279,7 +279,7 @@ pytest tests/ -v
 uv run pytest tests/ -v
 
 # With coverage
-pytest tests/ --cov=src --cov-report=html
+pytest tests/ --cov=src --cov-report=html --cov-report=term-missing
 ```
 
 ### Test Categories
@@ -297,6 +297,18 @@ The test suite covers:
 - ✅ Command execution and output parsing
 - ✅ Edge cases and error scenarios
 - ✅ Mock testing for external dependencies
+
+To generate coverage reports:
+```bash
+# Generate HTML coverage report
+pytest tests/ --cov=src --cov-report=html
+
+# Generate terminal coverage report
+pytest tests/ --cov=src --cov-report=term-missing
+
+# Generate both reports
+pytest tests/ --cov=src --cov-report=html --cov-report=term-missing
+```
 
 ## 🔧 Configuration
 
@@ -318,28 +330,30 @@ NMAP_TIMEOUT=300
 
 ### Configuration File
 
-Create `config/config.json`:
+The server will automatically create a default configuration file from `config/config.example.json` on first run, or you can create `config/config.json` manually:
 
 ```json
 {
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "logs/netops-mcp.log"
+  },
+  "security": {
+    "allow_privileged_commands": false,
+    "allowed_hosts": [],
+    "rate_limit_requests": 100,
+    "rate_limit_window": 60
+  },
+  "network": {
+    "default_timeout": 30,
+    "max_scan_timeout": 300,
+    "allowed_ports": "1-65535"
+  },
   "server": {
     "host": "0.0.0.0",
     "port": 8815,
-    "log_level": "INFO"
-  },
-  "tools": {
-    "timeouts": {
-      "ping": 10,
-      "traceroute": 30,
-      "mtr": 30,
-      "curl": 30,
-      "nmap": 300
-    },
-    "defaults": {
-      "ping_count": 4,
-      "traceroute_max_hops": 30,
-      "mtr_count": 10
-    }
+    "path": "/netops-mcp"
   }
 }
 ```
@@ -362,7 +376,7 @@ services:
       - ./logs:/app/logs
       - ./config:/app/config
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8815/netops-mcp/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8815/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -402,7 +416,7 @@ docker run -d \
 
 ```bash
 # Check server health
-curl http://localhost:8815/netops-mcp/health
+curl http://localhost:8815/health
 
 # Check system requirements
 curl -X POST http://localhost:8815/netops-mcp \
@@ -431,20 +445,107 @@ curl -X POST http://localhost:8815/netops-mcp \
 - **Timeout Management**: Configurable timeouts for all operations
 - **Resource Limits**: Built-in resource usage limits
 
+## 🚀 Production Deployment
+
+### Quick Production Setup
+
+1. **Generate API Keys**:
+   ```bash
+   python scripts/generate_api_key.py -n 2 --config config/config.json
+   ```
+
+2. **Configure Security** (`config/config.json`):
+   ```json
+   {
+     "security": {
+       "require_auth": true,
+       "api_keys": ["your-generated-key-here"],
+       "rate_limit_requests": 100,
+       "rate_limit_window": 60
+     }
+   }
+   ```
+
+3. **Deploy with Docker Compose**:
+   ```bash
+   docker compose up -d
+   ```
+
+4. **Verify Deployment**:
+   ```bash
+   curl http://localhost:8815/health
+   ```
+
+### Authentication
+
+The server supports API key authentication for secure access:
+
+```bash
+# Make authenticated request
+curl -X POST http://localhost:8815/netops-mcp \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"method": "ping_host", "params": {"host": "google.com"}}'
+```
+
+### HTTPS Setup (Recommended)
+
+Use a reverse proxy (nginx or Caddy) for HTTPS:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://localhost:8815;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### Production Features
+
+- ✅ **API Key Authentication**: Secure access control with Bearer tokens
+- ✅ **Rate Limiting**: Built-in rate limiting (100 req/min default)
+- ✅ **Input Validation**: Comprehensive input sanitization
+- ✅ **Structured Logging**: JSON logging for production environments
+- ✅ **Health Checks**: Built-in health check endpoints
+- ✅ **Docker Support**: Production-ready Docker image with multi-stage build
+- ✅ **Non-Root User**: Runs as unprivileged user in container
+- ✅ **Resource Limits**: Configurable CPU and memory limits
+- ✅ **CORS Support**: Configurable CORS for web applications
+- ✅ **Security Headers**: Automatic security headers
+
+### CI/CD Pipeline
+
+GitHub Actions workflows included:
+- **Tests**: Automated testing on Python 3.10, 3.11, 3.12
+- **Linting**: Code quality checks (Black, Ruff, mypy)
+- **Security**: Security scanning (Bandit, Safety, Trivy)
+- **Release**: Automated Docker image publishing to GitHub Container Registry
+
+### Documentation
+
+- 📖 [Production Deployment Guide](docs/PRODUCTION_DEPLOYMENT.md)
+- 🔐 [API Authentication Guide](docs/API_AUTHENTICATION.md)
+- 🛡️ [Security Policy](SECURITY.md)
+
 ## 🤝 Contributing
 
 ### Development Setup
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/alpadalar/NetOpsMCP.git
 cd NetOpsMCP
 
 # Install development dependencies
-uv pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
+uv pip install -e .
 
 # Run tests
 pytest tests/ -v
@@ -453,8 +554,7 @@ pytest tests/ -v
 ### Code Style
 
 - **Black**: Code formatting
-- **isort**: Import sorting
-- **flake8**: Linting
+- **Ruff**: Linting and import sorting
 - **mypy**: Type checking
 
 ### Testing Guidelines
@@ -481,9 +581,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Documentation
 
-- [API Reference](docs/api.md)
-- [Configuration Guide](docs/configuration.md)
-- [Troubleshooting](docs/troubleshooting.md)
+- API Reference: See the API Reference section above
+- Configuration Guide: See the Configuration section above  
+- Troubleshooting: See the Support section above
 
 ### Issues
 
@@ -493,8 +593,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Community
 
-- **Discussions**: GitHub Discussions
-- **Wiki**: Project Wiki for additional documentation
+- **Issues**: GitHub Issues for discussions and questions
+- **Documentation**: See the sections above for comprehensive guides
 
 ## 🙏 Acknowledgments
 

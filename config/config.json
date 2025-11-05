@@ -8,11 +8,7 @@
     "allow_privileged_commands": false,
     "allowed_hosts": [],
     "rate_limit_requests": 100,
-    "rate_limit_window": 60,
-    "require_auth": false,
-    "api_keys": [],
-    "enable_cors": false,
-    "cors_origins": ["*"]
+    "rate_limit_window": 60
   },
   "network": {
     "default_timeout": 30,

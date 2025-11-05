@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import signal
+import time
 from typing import Optional
 
 try:
@@ -32,6 +33,9 @@ from .tools.system.network_tools import NetworkTools
 from .tools.system.monitoring_tools import MonitoringTools
 from .tools.security.scanning_tools import ScanningTools
 from .utils.system_check import check_required_tools, get_system_info
+from .middleware.auth import AuthenticationMiddleware
+from .middleware.rate_limiter import RateLimitMiddleware
+from .middleware.metrics import MetricsMiddleware, create_metrics_endpoint
 
 
 logger = logging.getLogger("netops-mcp.http")
@@ -323,6 +327,123 @@ class NetOpsMCPHTTPServer:
         health_thread = threading.Thread(target=health_check_loop, daemon=True)
         health_thread.start()
 
+    def _add_health_endpoint(self):
+        """Add custom health endpoint and middleware to FastMCP HTTP transport."""
+        try:
+            self.logger.info("Attempting to add custom health endpoint and middleware...")
+            self.logger.info(f"FastMCP object type: {type(self.mcp)}")
+            self.logger.info(f"FastMCP attributes: {dir(self.mcp)}")
+            
+            # FastMCP HTTP transport'ına custom endpoint ekle
+            if hasattr(self.mcp, 'http_app') and callable(self.mcp.http_app):
+                self.logger.info("FastMCP http_app method found, getting Starlette app...")
+                # Starlette app'i al
+                starlette_app = self.mcp.http_app()
+                self.logger.info(f"Starlette app type: {type(starlette_app)}")
+                
+                # Add middleware
+                self._add_middleware(starlette_app)
+                
+                # Starlette app'e health endpoint ekle
+                from starlette.responses import JSONResponse
+                
+                async def health_endpoint(request):
+                    try:
+                        # System tools kontrolü
+                        system_tools = check_required_tools()
+                        available_tools = len(system_tools['available_tools'])
+                        total_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
+                        
+                        return JSONResponse({
+                            "status": "healthy",
+                            "server": "NetOpsMCP-HTTP",
+                            "mcp_tools": 26,  # Total MCP tools
+                            "system_tools_available": available_tools,
+                            "system_tools_total": total_tools,
+                            "total_tools": 26 + total_tools,
+                            "authentication": self.config.security.require_auth,
+                            "rate_limiting": True,
+                            "timestamp": time.time()
+                        })
+                    except Exception as e:
+                        return JSONResponse({
+                            "status": "unhealthy",
+                            "error": str(e),
+                            "timestamp": time.time()
+                        }, status_code=500)
+                
+                # Starlette app'e route ekle
+                starlette_app.add_route("/health", health_endpoint, methods=["GET"])
+                self.logger.info("Custom health endpoint added at /health")
+                
+                # Add metrics endpoint
+                metrics_endpoint_handler = create_metrics_endpoint()
+                starlette_app.add_route("/metrics", metrics_endpoint_handler, methods=["GET"])
+                self.logger.info("Metrics endpoint added at /metrics")
+            else:
+                self.logger.warning("FastMCP http_app method not available, using file-based health check")
+                self.logger.info(f"Available attributes: {[attr for attr in dir(self.mcp) if not attr.startswith('_')]}")
+                
+        except Exception as e:
+            self.logger.warning(f"Could not add custom health endpoint: {e}")
+            self.logger.info("Using file-based health check as fallback")
+    
+    def _add_middleware(self, app):
+        """Add middleware to Starlette app."""
+        try:
+            # Add metrics middleware (first, so it tracks all requests)
+            app.add_middleware(MetricsMiddleware)
+            self.logger.info("Metrics middleware enabled")
+            
+            # Add CORS middleware if enabled
+            if self.config.security.enable_cors:
+                from starlette.middleware.cors import CORSMiddleware
+                app.add_middleware(
+                    CORSMiddleware,
+                    allow_origins=self.config.security.cors_origins,
+                    allow_credentials=True,
+                    allow_methods=["*"],
+                    allow_headers=["*"],
+                )
+                self.logger.info(f"CORS middleware enabled for origins: {self.config.security.cors_origins}")
+            
+            # Add rate limiting middleware
+            app.add_middleware(
+                RateLimitMiddleware,
+                requests_per_window=self.config.security.rate_limit_requests,
+                window_seconds=self.config.security.rate_limit_window,
+                exempt_paths={"/health", "/metrics"}
+            )
+            self.logger.info(
+                f"Rate limiting enabled: {self.config.security.rate_limit_requests} "
+                f"requests per {self.config.security.rate_limit_window}s"
+            )
+            
+            # Add authentication middleware if required
+            if self.config.security.require_auth:
+                if not self.config.security.api_keys:
+                    self.logger.warning("Authentication required but no API keys configured!")
+                else:
+                    app.add_middleware(
+                        AuthenticationMiddleware,
+                        api_keys=self.config.security.api_keys,
+                        require_auth=True,
+                        exempt_paths={"/health", "/metrics"}
+                    )
+                    self.logger.info(f"Authentication enabled with {len(self.config.security.api_keys)} API key(s)")
+            
+            # Add security headers middleware
+            from starlette.middleware.trustedhost import TrustedHostMiddleware
+            if self.config.security.allowed_hosts:
+                app.add_middleware(
+                    TrustedHostMiddleware,
+                    allowed_hosts=self.config.security.allowed_hosts
+                )
+                self.logger.info(f"Trusted host middleware enabled for: {self.config.security.allowed_hosts}")
+            
+        except Exception as e:
+            self.logger.error(f"Error adding middleware: {e}")
+
     def run(self) -> None:
         """
         Start the HTTP MCP server.
@@ -340,6 +461,9 @@ class NetOpsMCPHTTPServer:
 
         try:
             self.logger.info(f"Starting NetOpsMCP HTTP server on {self.host}:{self.port}{self.path}")
+            
+            # Add custom health endpoint before starting server
+            self._add_health_endpoint()
             
             # Run with FastMCP's built-in HTTP transport
             self.mcp.run(

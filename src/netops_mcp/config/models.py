@@ -25,6 +25,10 @@ class SecurityConfig(BaseModel):
     allowed_hosts: list[str] = Field(default_factory=list)
     rate_limit_requests: int = 100
     rate_limit_window: int = 60
+    require_auth: bool = False
+    api_keys: list[str] = Field(default_factory=list)
+    enable_cors: bool = False
+    cors_origins: list[str] = Field(default_factory=list)
 
 
 class NetworkConfig(BaseModel):

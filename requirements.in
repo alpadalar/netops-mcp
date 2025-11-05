@@ -7,14 +7,10 @@ psutil>=5.9.0
 # HTTP and networking
 requests>=2.31.0
 httpx>=0.25.0
+starlette>=0.35.0
 
-# Development and testing
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-pytest-cov>=4.1.0
-black>=23.0.0
-flake8>=6.0.0
-mypy>=1.5.0
+# Security
+python-dotenv>=1.0.0
 
 # Optional: FastMCP for HTTP transport
 fastmcp[server]>=0.1.0

@@ -606,3 +606,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **NetOps MCP** - Empowering network operations through standardized tool access.
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/alpadalar-netops-mcp).
+

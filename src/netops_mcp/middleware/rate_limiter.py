@@ -37,22 +37,43 @@ class RateLimiter:
         self.window_seconds = window_seconds
         self.requests: Dict[str, list[float]] = defaultdict(list)
         self.lock = Lock()
-        
+        self._last_prune = 0.0
+
         logger.info(f"Rate limiter initialized: {requests_per_window} requests per {window_seconds}s")
-    
+
     def _cleanup_old_requests(self, client_id: str, current_time: float) -> None:
         """
         Remove requests outside the current time window.
-        
+
         Args:
             client_id: Client identifier
             current_time: Current timestamp
         """
         cutoff_time = current_time - self.window_seconds
-        self.requests[client_id] = [
+        recent = [
             req_time for req_time in self.requests[client_id]
             if req_time > cutoff_time
         ]
+        # Drop the bucket entirely when empty so idle clients don't accumulate.
+        if recent:
+            self.requests[client_id] = recent
+        else:
+            self.requests.pop(client_id, None)
+
+    def _prune_all(self, current_time: float) -> None:
+        """Remove every client whose requests have all aged out of the window.
+
+        Per-client cleanup only runs when that client is seen again, so a
+        caller that rotates identifiers (e.g. source IPs) would otherwise grow
+        the map without bound. This periodic sweep caps that growth.
+        """
+        cutoff_time = current_time - self.window_seconds
+        for client_id in list(self.requests.keys()):
+            recent = [t for t in self.requests[client_id] if t > cutoff_time]
+            if recent:
+                self.requests[client_id] = recent
+            else:
+                self.requests.pop(client_id, None)
     
     def is_allowed(self, client_id: str) -> Tuple[bool, int, int]:
         """
@@ -69,10 +90,16 @@ class RateLimiter:
         """
         with self.lock:
             current_time = time.time()
-            
+
+            # Opportunistically sweep stale buckets (at most once per window) to
+            # bound memory when clients/IPs rotate and are never seen again.
+            if current_time - self._last_prune > self.window_seconds:
+                self._prune_all(current_time)
+                self._last_prune = current_time
+
             # Clean up old requests
             self._cleanup_old_requests(client_id, current_time)
-            
+
             # Count requests in current window
             request_count = len(self.requests[client_id])
             

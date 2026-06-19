@@ -7,6 +7,7 @@ to be accessible without authentication (e.g., health checks).
 """
 
 import hashlib
+import hmac
 import secrets
 import logging
 from typing import Optional, List, Set, Callable, Awaitable
@@ -101,13 +102,17 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         Returns:
             True if valid, False otherwise
         """
-        # Check if the key matches any stored key (plain or hashed)
-        if api_key in self.api_keys:
-            return True
-        
-        # Check hashed version
-        hashed = self._hash_key(api_key)
-        return hashed in self.hashed_keys
+        # Compare against the SHA-256 hash of every configured key using a
+        # constant-time comparison. We deliberately avoid `api_key in
+        # self.api_keys` (a short-circuiting, non-constant-time compare of the
+        # raw secret) and check all keys without early exit to limit timing
+        # side channels.
+        candidate = self._hash_key(api_key)
+        result = False
+        for stored in self.hashed_keys:
+            if hmac.compare_digest(candidate, stored):
+                result = True
+        return result
     
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable]

@@ -59,7 +59,7 @@ def validate_hostname(hostname: str, allow_localhost: bool = True) -> str:
     # Validate as hostname
     # Hostname labels can contain letters, digits, and hyphens
     # Cannot start or end with hyphen
-    hostname_pattern = r'^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))*$'
+    hostname_pattern = r'^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))*$'
     
     if not re.match(hostname_pattern, hostname):
         raise ValidationError(f"Invalid hostname format: {hostname}")
@@ -194,7 +194,7 @@ def validate_domain(domain: str) -> str:
     
     # Domain pattern: labels separated by dots
     # Each label: 1-63 chars, alphanumeric and hyphens, cannot start/end with hyphen
-    domain_pattern = r'^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))*\\.[a-zA-Z]{2,}$'
+    domain_pattern = r'^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)(\.(?!-)[a-zA-Z0-9-]{1,63}(?<!-))*\.[a-zA-Z]{2,}$'
     
     # Allow single-label domains (for internal networks)
     single_label_pattern = r'^(?!-)[a-zA-Z0-9-]{1,63}(?<!-)$'

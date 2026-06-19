@@ -1,0 +1,8 @@
+{
+  "_comment": "HTTP (streamable) transport. Start the server with 'python -m netops_mcp.server_http' (or docker compose up), then point your MCP client at its URL. Use this form instead of command/args; 'python -m netops_mcp.server_http' speaks HTTP on a port, not stdio.",
+  "mcpServers": {
+    "netops-mcp": {
+      "url": "http://localhost:8815/netops-mcp"
+    }
+  }
+}

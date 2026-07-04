@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple, Any
 REQUIRED_TOOLS = [
     'curl', 'ping', 'traceroute', 'mtr', 'telnet', 'nc',
     'nmap', 'netstat', 'ss', 'nslookup', 'dig', 'host',
-    'arp', 'arping', 'httpie'
+    'arp', 'arping', 'http'
 ]
 
 
@@ -80,12 +80,15 @@ def is_tool_available(tool_name: str) -> bool:
             result = subprocess.run(['host', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'arping':
-            result = subprocess.run(['arping', '-V'], 
+            result = subprocess.run(['arping', '-V'],
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'http':
+            result = subprocess.run(['http', '--version'],
                                   capture_output=True, text=True, timeout=5)
         else:
-            result = subprocess.run([tool_name, '--version'], 
+            result = subprocess.run([tool_name, '--version'],
                                   capture_output=True, text=True, timeout=5)
-        
+
         return result.returncode == 0
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, subprocess.SubprocessError):
         return False
@@ -123,12 +126,15 @@ def get_tool_version(tool_name: str) -> str:
             result = subprocess.run(['host', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'arping':
-            result = subprocess.run(['arping', '-V'], 
+            result = subprocess.run(['arping', '-V'],
+                                  capture_output=True, text=True, timeout=5)
+        elif tool_name == 'http':
+            result = subprocess.run(['http', '--version'],
                                   capture_output=True, text=True, timeout=5)
         else:
-            result = subprocess.run([tool_name, '--version'], 
+            result = subprocess.run([tool_name, '--version'],
                                   capture_output=True, text=True, timeout=5)
-        
+
         if result.returncode == 0:
             version_line = result.stdout.split('\n')[0]
             return version_line
@@ -170,6 +176,7 @@ def get_system_info() -> Dict[str, Any]:
     
     info = {
         'platform': platform.system(),
+        'platform_version': platform.version(),
         'python_version': platform.python_version(),
         'architecture': platform.machine(),
         'hostname': platform.node(),

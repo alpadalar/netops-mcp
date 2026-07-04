@@ -22,7 +22,6 @@ import signal
 from typing import Optional, List, Annotated
 
 from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.tools import Tool
 from mcp.types import TextContent as Content
 from pydantic import Field
 
@@ -77,7 +76,7 @@ class NetOpsMCPServer:
             
             # Check required tools
             tool_status = check_tools_status()
-            missing_tools = [tool for tool, available in tool_status.items() if not available]
+            missing_tools = tool_status['missing_tools']
             
             if missing_tools:
                 self.logger.warning(f"Missing tools: {', '.join(missing_tools)}")
@@ -284,7 +283,7 @@ class NetOpsMCPServer:
             response_data = {
                 "tools": tools,
                 "system_info": system_info,
-                "missing_tools": [tool for tool, available in tools.items() if not available]
+                "missing_tools": tools['missing_tools']
             }
             
             return [Content(type="text", text=json.dumps(response_data, indent=2))]
@@ -353,11 +352,12 @@ def main():
         print(f"Memory: {system_info['memory_total']}")
         
         print("\nRequired tools:")
-        for tool, available in tools.items():
-            status = "✅" if available else "❌"
-            print(f"  {status} {tool}")
-        
-        missing = [tool for tool, available in tools.items() if not available]
+        for tool in tools['available_tools']:
+            print(f"  ✅ {tool}")
+        for tool in tools['missing_tools']:
+            print(f"  ❌ {tool}")
+
+        missing = tools['missing_tools']
         if missing:
             print(f"\nMissing tools: {', '.join(missing)}")
             sys.exit(1)

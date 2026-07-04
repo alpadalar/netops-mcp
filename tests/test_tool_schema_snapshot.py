@@ -57,7 +57,7 @@ def _build_servers() -> Tuple[Any, Any]:
     patches = [
         patch("netops_mcp.server.check_tools_status", return_value=FAKE_TOOL_STATUS),
         patch("netops_mcp.server.get_system_info", return_value=FAKE_SYSTEM_INFO),
-        patch("netops_mcp.server_http.check_required_tools", return_value=FAKE_TOOL_STATUS),
+        patch("netops_mcp.server_http.check_tools_status", return_value=FAKE_TOOL_STATUS),
         patch("netops_mcp.server_http.get_system_info", return_value=FAKE_SYSTEM_INFO),
         patch(
             "netops_mcp.server_http.NetOpsMCPHTTPServer._setup_health_check",

@@ -164,12 +164,21 @@ class ConnectivityTools(NetOpsTool):
 
             command = ['timeout', str(timeout), 'telnet', host, str(port)]
             result = self._execute_command(command, timeout + 5)
-            
+
+            # WR-06: on an OPEN port telnet stays interactive until the
+            # `timeout` wrapper kills it (exit 124), so the exit code alone
+            # inverts the verdict exactly in the success case. Derive
+            # `connected` from telnet's own session banner instead: stdout
+            # contains "Connected to <host>" whenever the TCP session was
+            # established. Exit 124 alone is NOT sufficient (a filtered port
+            # also hangs in connect() until killed without ever connecting).
+            connected = result["success"] or "Connected to" in result["stdout"]
+
             response_data = {
                 "host": host,
                 "port": port,
                 "success": result["success"],
-                "connected": result["success"],
+                "connected": connected,
                 "raw_output": result["stdout"],
                 "error": result["stderr"] if not result["success"] else None
             }

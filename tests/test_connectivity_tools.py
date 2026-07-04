@@ -415,6 +415,42 @@ class TestConnectivityTools:
         assert "timeout" in call_args
         assert "30" in call_args
 
+    def test_telnet_connect_open_port_exit_124_reports_connected(self, mock_execute_command):
+        """Open port (WR-06 regression): telnet held the session until the
+        `timeout` wrapper killed it (exit 124). `connected` must be derived
+        from the session banner in stdout, not from the exit code."""
+        mock_execute_command.return_value = {
+            "success": False,
+            "stdout": "Trying 142.250.185.78...\nConnected to google.com.\n"
+                      "Escape character is '^]'.",
+            "stderr": "",
+            "return_code": 124,
+            "command": "timeout 10 telnet google.com 80"
+        }
+
+        result = self.connectivity_tools.telnet_connect("google.com", 80)
+        data = json.loads(result[0].text)
+
+        assert data["connected"] is True
+        assert data["success"] is False
+
+    def test_telnet_connect_filtered_port_exit_124_not_connected(self, mock_execute_command):
+        """Filtered port (WR-06): telnet hung in connect() until killed —
+        exit 124 with no session banner must NOT be reported as connected."""
+        mock_execute_command.return_value = {
+            "success": False,
+            "stdout": "Trying 192.0.2.1...\n",
+            "stderr": "",
+            "return_code": 124,
+            "command": "timeout 10 telnet 192.0.2.1 8080"
+        }
+
+        result = self.connectivity_tools.telnet_connect("192.0.2.1", 8080)
+        data = json.loads(result[0].text)
+
+        assert data["connected"] is False
+        assert data["success"] is False
+
     def test_telnet_connect_invalid_host(self, mock_execute_command):
         """Test telnet connect with invalid host."""
         mock_execute_command.return_value = {

@@ -116,8 +116,19 @@ HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev
 
         parsed = OutputParser.parse_mtr_output(mtr_output)
 
-        # This test is simplified since mtr parsing is not implemented
+        # WR-01: real mtr --report hop lines ("1.|-- ...") must be parsed.
         assert "target" in parsed
+        assert len(parsed["hops"]) == 3
+        assert parsed["hops"][0]["host"] == "_gateway"
+        assert parsed["hops"][0]["hop"] == 1
+        assert parsed["hops"][0]["loss_percent"] == 0.0
+        assert parsed["hops"][0]["snt"] == 3
+        assert parsed["hops"][0]["last"] == 1.2
+        assert parsed["hops"][0]["avg"] == 1.1
+        assert parsed["hops"][0]["best"] == 0.9
+        assert parsed["hops"][0]["worst"] == 1.3
+        assert parsed["hops"][2]["host"] == "google.com"
+        assert parsed["hops"][2]["hop"] == 3
 
     def test_parse_mtr_output_with_malformed_lines(self):
         """Test mtr output parsing with malformed lines."""
@@ -131,8 +142,10 @@ HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev
 
         parsed = OutputParser.parse_mtr_output(mtr_output)
 
-        # This test is simplified since mtr parsing is not implemented
+        # Malformed lines are skipped; valid hop lines are still parsed (WR-01).
         assert "target" in parsed
+        assert len(parsed["hops"]) == 3
+        assert [h["hop"] for h in parsed["hops"]] == [1, 2, 3]
 
     def test_parse_mtr_output_empty(self):
         """Test mtr output parsing with empty output."""

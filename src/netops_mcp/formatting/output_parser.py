@@ -122,8 +122,12 @@ class OutputParser:
             parts = line.split()
             if len(parts) >= 8:
                 try:
-                    # Skip header lines and non-numeric entries
-                    hop_num = int(parts[0])
+                    # Skip header lines and non-numeric entries.
+                    # Real mtr --report hop lines start with "1.|--", "2.|--",
+                    # etc. (WR-01): strip the ".|--" decoration so the hop
+                    # number parses instead of every line being skipped.
+                    hop_token = parts[0].rstrip('.|-')   # "1.|--" -> "1"
+                    hop_num = int(hop_token)
                     hop_info = {
                         "hop": hop_num,
                         "host": parts[1],

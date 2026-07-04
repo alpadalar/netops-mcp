@@ -279,18 +279,26 @@ class TestConnectivityTools:
         assert "15" in call_args
 
     def test_traceroute_path_with_timeout(self, mock_execute_command, sample_traceroute_output):
-        """Test traceroute with custom timeout."""
+        """Test traceroute with custom timeout (WR-04 regression).
+
+        traceroute's `-w` is the PER-PROBE wait time, not an overall deadline.
+        The overall timeout must never appear after `-w` (it would stall up to
+        `timeout` seconds per silent probe); it is enforced via
+        _execute_command's second positional argument instead.
+        """
         mock_execute_command.return_value = sample_traceroute_output
-        
+
         result = self.connectivity_tools.traceroute_path("google.com", timeout=60)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
-        # Verify timeout was passed to command
         mock_execute_command.assert_called_once()
         call_args = mock_execute_command.call_args[0][0]
-        assert "-w" in call_args
-        assert "60" in call_args
+        # Fixed small per-probe wait; overall timeout not in argv
+        assert call_args[call_args.index("-w") + 1] == "3"
+        assert "60" not in call_args
+        # Overall deadline enforced by the subprocess timeout
+        assert mock_execute_command.call_args[0][1] == 70
 
     def test_traceroute_path_invalid_target(self, mock_execute_command):
         """Test traceroute with invalid target."""

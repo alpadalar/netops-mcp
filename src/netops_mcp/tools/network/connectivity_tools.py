@@ -70,7 +70,13 @@ class ConnectivityTools(NetOpsTool):
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
 
-            command = ['traceroute', '-m', str(max_hops), '-w', str(timeout), target]
+            # WR-04 (same flag-misuse class as BUG-04): traceroute's `-w` is
+            # the PER-PROBE wait, not an overall deadline. Passing the tool's
+            # overall timeout there made every silent hop wait up to `timeout`
+            # seconds per probe, guaranteeing subprocess timeouts on filtered
+            # paths. Use a small fixed per-probe wait; the overall deadline is
+            # enforced by the subprocess timeout below.
+            command = ['traceroute', '-m', str(max_hops), '-w', '3', target]
             result = self._execute_command(command, timeout + 10)
             
             if result["success"]:

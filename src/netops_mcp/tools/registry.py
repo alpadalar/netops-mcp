@@ -30,6 +30,34 @@ from ..utils.system_check import check_required_tools as check_tools_status
 from ..utils.system_check import get_system_info
 
 
+def _registered_tool_count(mcp: Any) -> int:
+    """Best-effort count of tools registered on a FastMCP instance (REF-05, WR-03).
+
+    REF-05 derives the tool count dynamically instead of hardcoding ``26``. Both
+    the stdio SDK ``mcp.server.fastmcp.FastMCP`` and the standalone
+    ``fastmcp.FastMCP`` expose that count only through the private
+    ``_tool_manager._tools`` mapping at the pinned versions (mcp 1.13.0 /
+    fastmcp 2.11.3). There is no SYNC public accessor that works uniformly across
+    both — the SDK's ``_tool_manager.list_tools()`` is synchronous but fastmcp's
+    is a coroutine, and this helper is called from synchronous code (registration
+    return and the ``health`` tool).
+
+    WR-03: the private access is therefore wrapped defensively. An upstream
+    rename of ``_tool_manager`` or ``_tools`` (the ``mcp`` SDK tracks GitHub HEAD
+    per CLAUDE.md) degrades this to a graceful ``0`` instead of raising
+    ``AttributeError`` at registration return / inside the ``health`` tool. The
+    focused guard test in ``tests/test_registry.py`` asserts the private path
+    still exists on BOTH FastMCP classes, so an SDK bump fails LOUDLY in CI
+    rather than silently reporting a zero tool count at runtime.
+    """
+    tool_mgr = getattr(mcp, "_tool_manager", None)
+    tools = getattr(tool_mgr, "_tools", None)
+    try:
+        return len(tools) if tools is not None else 0
+    except TypeError:
+        return 0
+
+
 def register_tools(mcp: Any, tools: Any) -> int:
     """Register all 26 MCP tools on ``mcp``.
 
@@ -259,7 +287,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return [Content(type="text", text=json.dumps({
             "status": status,
             "tests_passed": tests_passed,
-            "mcp_tools": len(mcp._tool_manager._tools),
+            "mcp_tools": _registered_tool_count(mcp),
             "details": (
                 "Startup tests passed" if tests_passed is True
                 else ("Startup tests failed" if tests_passed is False
@@ -268,5 +296,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         }))]
 
     # REF-05: derive the count dynamically from the FastMCP instance rather
-    # than the old hardcoded literal 26 (verified sync on both FastMCP classes).
-    return len(mcp._tool_manager._tools)
+    # than the old hardcoded literal 26. WR-03: access is wrapped defensively
+    # (see _registered_tool_count) so an SDK internals rename degrades to 0
+    # instead of crashing server construction; the CI guard test catches it.
+    return _registered_tool_count(mcp)

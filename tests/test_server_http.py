@@ -74,15 +74,21 @@ class TestNetOpsMCPHTTPServer:
     @patch('netops_mcp.server_http.signal.signal')
     def test_run_server(self, mock_signal):
         """Test server run method."""
-        server = NetOpsMCPHTTPServer()
-        
+        # Opt out of auth so run() exercises the server path, not the
+        # fail-fast gate (the gate has its own tests in TestAuthGate).
+        config = Config()
+        config.security.require_auth = False
+
+        with patch('netops_mcp.server_http.load_config', return_value=config):
+            server = NetOpsMCPHTTPServer()
+
         # Mock the mcp.run method to avoid actually starting the server
         with patch.object(server.mcp, 'run') as mock_run:
             try:
                 server.run()
             except SystemExit:
                 pass  # Expected to exit
-        
+
         # Check that signal handlers were set up
         assert mock_signal.call_count >= 2
 
@@ -158,7 +164,7 @@ class TestNetOpsMCPHTTPServer:
         """Test the main function entry point."""
         # This is a basic test to ensure the main function exists and can be called
         from netops_mcp.server_http import main
-        
+
         # Mock argparse to avoid actual argument parsing
         with patch('argparse.ArgumentParser') as mock_parser:
             mock_args = Mock()
@@ -167,16 +173,19 @@ class TestNetOpsMCPHTTPServer:
             mock_args.path = '/test'
             mock_args.config = None
             mock_parser.return_value.parse_args.return_value = mock_args
-            
+
             # Mock the server creation to avoid actually starting it
-            with patch('netops_mcp.server_http.NetOpsMCPHTTPServer') as mock_server_class:
+            with patch('netops_mcp.server_http.NetOpsMCPHTTPServer') as mock_server_class, \
+                 patch('netops_mcp.server_http.os.getenv', return_value=None):
                 mock_server = Mock()
                 mock_server_class.return_value = mock_server
-                
+
                 # Call main function
                 main()
-                
-                # Verify server was created with correct arguments
+
+                # CLI args pass straight through (None-sentinel precedence
+                # resolves inside __init__); --config falls back to
+                # $NETOPS_MCP_CONFIG (None here — env cleared for the test).
                 mock_server_class.assert_called_once_with(
                     config_path=None,
                     host='127.0.0.1',
@@ -295,3 +304,29 @@ class TestPrecedence:
         assert server.host == "1.2.3.4"
         assert server.port == 9999
         assert server.path == "/custom"
+
+    def test_main_config_env_fallback(self):
+        """--config omitted falls back to NETOPS_MCP_CONFIG (stdio parity)."""
+        from netops_mcp.server_http import main
+
+        with patch('argparse.ArgumentParser') as mock_parser:
+            mock_args = Mock()
+            mock_args.host = None
+            mock_args.port = None
+            mock_args.path = None
+            mock_args.config = None
+            mock_parser.return_value.parse_args.return_value = mock_args
+
+            with patch('netops_mcp.server_http.NetOpsMCPHTTPServer') as mock_server_class, \
+                 patch.dict('os.environ', {'NETOPS_MCP_CONFIG': '/env/config.json'}):
+                mock_server = Mock()
+                mock_server_class.return_value = mock_server
+
+                main()
+
+                mock_server_class.assert_called_once_with(
+                    config_path='/env/config.json',
+                    host=None,
+                    port=None,
+                    path=None
+                )

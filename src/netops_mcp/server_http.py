@@ -5,11 +5,13 @@ This module provides an HTTP transport layer for the MCP server,
 supporting both regular HTTP and streamable HTTP transports.
 """
 
-import logging
+import hashlib
 import json
+import logging
 import os
-import sys
+import secrets
 import signal
+import sys
 import time
 from typing import Optional
 
@@ -52,28 +54,32 @@ class NetOpsMCPHTTPServer:
     - System monitoring capabilities
     """
     
-    def __init__(self, 
+    def __init__(self,
                  config_path: Optional[str] = None,
-                 host: str = "0.0.0.0",
-                 port: int = 8815,
-                 path: str = "/netops-mcp"):
+                 host: Optional[str] = None,
+                 port: Optional[int] = None,
+                 path: Optional[str] = None):
         """
         Initialize the HTTP MCP server.
-        
+
+        Explicit arguments win over config; omitted (None) arguments fall back
+        to config.server values, whose builtin defaults are 0.0.0.0 / 8815 /
+        /netops-mcp (CLI > config.server > builtin precedence).
+
         Args:
             config_path: Path to configuration file
-            host: Server host address
-            port: Server port
-            path: HTTP path for MCP endpoint
+            host: Server host address (default: config server.host or 0.0.0.0)
+            port: Server port (default: config server.port or 8815)
+            path: HTTP path for MCP endpoint (default: config server.path or /netops-mcp)
         """
         if not FASTMCP_AVAILABLE:
             raise RuntimeError("FastMCP is not available. Please install fastmcp package.")
-            
+
         self.config = load_config(config_path)
         self.logger = setup_logging(self.config.logging)
-        self.host = host
-        self.port = port
-        self.path = path
+        self.host = host if host is not None else self.config.server.host
+        self.port = port if port is not None else self.config.server.port
+        self.path = path if path is not None else self.config.server.path
         
         # Initialize tools
         self.http_tools = HTTPTools()
@@ -401,7 +407,7 @@ class NetOpsMCPHTTPServer:
                 app.add_middleware(
                     CORSMiddleware,
                     allow_origins=self.config.security.cors_origins,
-                    allow_credentials=True,
+                    allow_credentials=self.config.security.cors_allow_credentials,
                     allow_methods=["*"],
                     allow_headers=["*"],
                 )
@@ -447,10 +453,29 @@ class NetOpsMCPHTTPServer:
     def run(self) -> None:
         """
         Start the HTTP MCP server.
-        
+
         Runs the server with streamable HTTP transport on the configured
         host and port.
+
+        Raises:
+            RuntimeError: If require_auth is enabled (the default) but no
+                API keys are configured. The server refuses to start BEFORE
+                uvicorn binds; the error carries operator guidance including
+                a freshly generated example key (never auto-activated).
         """
+        # Fail-fast auth gate (SEC-01): must stay in run(), never __init__,
+        # and BEFORE the try block below so the RuntimeError propagates to
+        # main() instead of being swallowed by the except handler.
+        if self.config.security.require_auth and not self.config.security.api_keys:
+            example = secrets.token_urlsafe(32)
+            raise RuntimeError(
+                "HTTP mode requires an API key (require_auth is enabled by default).\n"
+                f"  1. Example key (generated now, save it): {example}\n"
+                f"  2. Add its hash to config security.api_keys: "
+                f"\"sha256:{hashlib.sha256(example.encode()).hexdigest()}\"\n"
+                "  3. Or explicitly opt out: \"require_auth\": false  (NOT recommended)\n"
+            )
+
         def signal_handler(signum, frame):
             self.logger.info("Received signal to shutdown HTTP server...")
             sys.exit(0)
@@ -477,26 +502,34 @@ class NetOpsMCPHTTPServer:
             sys.exit(1)
 
 
-def main():
+def main() -> None:
     """Main entry point for standalone execution."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description='NetOpsMCP HTTP Server')
-    parser.add_argument('--host', default='0.0.0.0', help='Server host (default: 0.0.0.0)')
-    parser.add_argument('--port', type=int, default=8815, help='Server port (default: 8815)')
-    parser.add_argument('--path', default='/netops-mcp', help='HTTP path (default: /netops-mcp)')
-    parser.add_argument('--config', help='Configuration file path')
-    
+    parser.add_argument('--host', default=None,
+                        help='Server host (default: config server.host or 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=None,
+                        help='Server port (default: config server.port or 8815)')
+    parser.add_argument('--path', default=None,
+                        help='HTTP path (default: config server.path or /netops-mcp)')
+    parser.add_argument('--config',
+                        help='Configuration file path (default: $NETOPS_MCP_CONFIG)')
+
     args = parser.parse_args()
-    
+
+    # Parity with the stdio server: fall back to NETOPS_MCP_CONFIG when
+    # --config is omitted (start_http_server.sh exports it either way).
+    config_path = args.config or os.getenv("NETOPS_MCP_CONFIG")
+
     try:
         server = NetOpsMCPHTTPServer(
-            config_path=args.config,
+            config_path=config_path,
             host=args.host,
             port=args.port,
             path=args.path
         )
-        
+
         server.run()
     except KeyboardInterrupt:
         print("\nShutting down gracefully...")

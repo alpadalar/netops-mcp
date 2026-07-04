@@ -6,7 +6,6 @@ supporting both regular HTTP and streamable HTTP transports.
 """
 
 import hashlib
-import logging
 import os
 import secrets
 import signal
@@ -42,8 +41,6 @@ from .tools.security.scanning_tools import ScanningTools
 from .tools.system.monitoring_tools import MonitoringTools
 from .tools.system.network_tools import NetworkTools
 from .utils.system_check import check_required_tools as check_tools_status
-
-logger = logging.getLogger("netops-mcp.http")
 
 
 class NetOpsMCPHTTPServer:

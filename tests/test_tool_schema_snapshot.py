@@ -57,6 +57,12 @@ def _build_servers() -> Tuple[Any, Any]:
     Patch targets are the IMPORTING module's bindings (``server.py`` aliases the
     checker as ``check_tools_status``) — patching
     ``netops_mcp.utils.system_check.check_required_tools`` would silently no-op.
+    Phase 3 (03-01) extracted the tool closures into ``netops_mcp.tools.registry``,
+    so the ``check_required_tools`` / ``health`` closures now resolve
+    ``check_tools_status`` / ``get_system_info`` in the registry module — those
+    bindings are patched here too. (The HTTP server no longer imports
+    ``get_system_info`` directly, so only ``server_http.check_tools_status``
+    remains a valid server-module target.)
     ``_setup_health_check`` is neutralized because it otherwise starts a daemon
     thread that forks ~15 subprocesses every 30s for the whole pytest session.
     """
@@ -64,7 +70,8 @@ def _build_servers() -> Tuple[Any, Any]:
         patch("netops_mcp.server.check_tools_status", return_value=FAKE_TOOL_STATUS),
         patch("netops_mcp.server.get_system_info", return_value=FAKE_SYSTEM_INFO),
         patch("netops_mcp.server_http.check_tools_status", return_value=FAKE_TOOL_STATUS),
-        patch("netops_mcp.server_http.get_system_info", return_value=FAKE_SYSTEM_INFO),
+        patch("netops_mcp.tools.registry.check_tools_status", return_value=FAKE_TOOL_STATUS),
+        patch("netops_mcp.tools.registry.get_system_info", return_value=FAKE_SYSTEM_INFO),
         patch(
             "netops_mcp.server_http.NetOpsMCPHTTPServer._setup_health_check",
             lambda self: None,

@@ -34,7 +34,8 @@ from .tools.network.discovery_tools import DiscoveryTools
 from .tools.system.network_tools import NetworkTools
 from .tools.system.monitoring_tools import MonitoringTools
 from .tools.security.scanning_tools import ScanningTools
-from .utils.system_check import check_required_tools as check_tools_status, get_system_info
+from .tools.registry import register_tools
+from .utils.system_check import check_required_tools as check_tools_status
 from .middleware.auth import AuthenticationMiddleware
 from .middleware.rate_limiter import RateLimitMiddleware
 from .middleware.metrics import MetricsMiddleware, create_metrics_endpoint
@@ -95,171 +96,11 @@ class NetOpsMCPHTTPServer:
         
         # Add health check endpoint
         self._setup_health_check()
-        
-        # Setup tools
-        self._setup_tools()
 
-    def _setup_tools(self) -> None:
-        """Register MCP tools with the server."""
-        
-        # HTTP/API Testing Tools
-        @self.mcp.tool(description="Execute HTTP request using curl")
-        def curl_request(url: str, method: str = "GET", headers: Optional[dict] = None, 
-                        data: Optional[str] = None, timeout: int = 30):
-            return self.http_tools.curl_request(url, method, headers, data, timeout)
-
-        @self.mcp.tool(description="Execute HTTP request using httpie")
-        def httpie_request(url: str, method: str = "GET", headers: Optional[dict] = None,
-                          data: Optional[dict] = None, timeout: int = 30):
-            return self.http_tools.httpie_request(url, method, headers, data, timeout)
-
-        @self.mcp.tool(description="Test API endpoint with validation")
-        def api_test(url: str, method: str = "GET", expected_status: int = 200,
-                    headers: Optional[dict] = None, timeout: int = 30):
-            return self.http_tools.api_test(url, method, expected_status, headers, timeout)
-
-        # Network Connectivity Tools
-        @self.mcp.tool(description="Ping a host to test connectivity")
-        def ping_host(host: str, count: int = 4, timeout: int = 10):
-            return self.connectivity_tools.ping_host(host, count, timeout)
-
-        @self.mcp.tool(description="Perform traceroute to a target")
-        def traceroute_path(target: str, max_hops: int = 30, timeout: int = 30):
-            return self.connectivity_tools.traceroute_path(target, max_hops, timeout)
-
-        @self.mcp.tool(description="Monitor network path using mtr")
-        def mtr_monitor(target: str, count: int = 10, timeout: int = 30):
-            return self.connectivity_tools.mtr_monitor(target, count, timeout)
-
-        @self.mcp.tool(description="Test port connectivity using telnet")
-        def telnet_connect(host: str, port: int, timeout: int = 10):
-            return self.connectivity_tools.telnet_connect(host, port, timeout)
-
-        @self.mcp.tool(description="Test port connectivity using netcat")
-        def netcat_test(host: str, port: int, timeout: int = 10):
-            return self.connectivity_tools.netcat_test(host, port, timeout)
-
-        # DNS Tools
-        @self.mcp.tool(description="Perform DNS lookup using nslookup")
-        def nslookup_query(domain: str, record_type: str = "A", server: Optional[str] = None):
-            return self.dns_tools.nslookup_query(domain, record_type, server)
-
-        @self.mcp.tool(description="Perform DNS lookup using dig")
-        def dig_query(domain: str, record_type: str = "A", server: Optional[str] = None):
-            return self.dns_tools.dig_query(domain, record_type, server)
-
-        @self.mcp.tool(description="Perform DNS lookup using host")
-        def host_lookup(domain: str, record_type: str = "A"):
-            return self.dns_tools.host_lookup(domain, record_type)
-
-        # Network Discovery Tools
-        @self.mcp.tool(description="Scan network using nmap")
-        def nmap_scan(target: str, ports: Optional[str] = None, scan_type: str = "basic", timeout: int = 300):
-            return self.discovery_tools.nmap_scan(target, ports, scan_type, timeout)
-
-        @self.mcp.tool(description="Discover network services")
-        def service_discovery(target: str, ports: Optional[str] = None):
-            return self.discovery_tools.service_discovery(target, ports)
-
-        # System Network Tools
-        @self.mcp.tool(description="Show network connections using ss")
-        def ss_connections(state: Optional[str] = None, protocol: Optional[str] = None):
-            return self.network_tools.ss_connections(state, protocol)
-
-        @self.mcp.tool(description="Show network connections using netstat")
-        def netstat_connections(state: Optional[str] = None, protocol: Optional[str] = None):
-            return self.network_tools.netstat_connections(state, protocol)
-
-        @self.mcp.tool(description="Show ARP table")
-        def arp_table():
-            return self.network_tools.arp_table()
-
-        @self.mcp.tool(description="ARP ping a host")
-        def arping_host(host: str, count: int = 4):
-            return self.network_tools.arping_host(host, count)
-
-        # System Monitoring Tools
-        @self.mcp.tool(description="Get system status")
-        def system_status():
-            return self.monitoring_tools.system_status()
-
-        @self.mcp.tool(description="Get CPU usage information")
-        def cpu_usage():
-            return self.monitoring_tools.cpu_usage()
-
-        @self.mcp.tool(description="Get memory usage information")
-        def memory_usage():
-            return self.monitoring_tools.memory_usage()
-
-        @self.mcp.tool(description="Get disk usage information")
-        def disk_usage():
-            return self.monitoring_tools.disk_usage()
-
-        @self.mcp.tool(description="List running processes")
-        def process_list(limit: int = 20):
-            return self.monitoring_tools.process_list(limit)
-
-        # Security Tools
-        @self.mcp.tool(description="Scan ports on a target")
-        def port_scan(target: str, ports: str, timeout: int = 60):
-            return self.scanning_tools.port_scan(target, ports, timeout)
-
-        @self.mcp.tool(description="Enumerate services on a target")
-        def service_enumeration(target: str, ports: Optional[str] = None):
-            return self.scanning_tools.service_enumeration(target, ports)
-
-        # System Tools
-        @self.mcp.tool(description="Check required system tools")
-        def check_required_tools():
-            try:
-                tools = check_tools_status()
-                system_info = get_system_info()
-
-                response_data = {
-                    "tools": tools,
-                    "system_info": system_info,
-                    "missing_tools": tools['missing_tools']
-                }
-                
-                return [{"type": "text", "text": json.dumps(response_data, indent=2)}]
-            except Exception as e:
-                return [{"type": "text", "text": json.dumps({"error": str(e)}, indent=2)}]
-
-        @self.mcp.tool(description="Health check endpoint")
-        def health():
-            # Count MCP tools (26 total)
-            mcp_tools = [
-                # HTTP/API Testing Tools (3)
-                "curl_request", "httpie_request", "api_test",
-                # Network Connectivity Tools (5)
-                "ping_host", "traceroute_path", "mtr_monitor", "telnet_connect", "netcat_test",
-                # DNS Tools (3)
-                "nslookup_query", "dig_query", "host_lookup",
-                # Network Discovery Tools (2)
-                "nmap_scan", "service_discovery",
-                # System Network Tools (4)
-                "ss_connections", "netstat_connections", "arp_table", "arping_host",
-                # System Monitoring Tools (5)
-                "system_status", "cpu_usage", "memory_usage", "disk_usage", "process_list",
-                # Security Tools (2)
-                "port_scan", "service_enumeration",
-                # System Tools (2)
-                "check_required_tools", "health"
-            ]
-            
-            # Count system tools
-            system_tools = check_tools_status()
-            available_system_tools = len(system_tools['available_tools'])
-            total_system_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
-            
-            return [{"type": "text", "text": json.dumps({
-                "status": "ok",
-                "server": "NetOpsMCP-HTTP",
-                "mcp_tools": len(mcp_tools),
-                "system_tools_available": available_system_tools,
-                "system_tools_total": total_system_tools,
-                "total_tools": len(mcp_tools) + total_system_tools
-            })}]
+        # Register the shared 26-tool surface (REF-04). tool_count is derived
+        # dynamically from the FastMCP instance (REF-05), replacing the former
+        # hardcoded 26 in the tool-registration path.
+        self.tool_count = register_tools(self.mcp, self)
 
     def _setup_health_check(self):
         """Setup health check endpoint for Docker."""

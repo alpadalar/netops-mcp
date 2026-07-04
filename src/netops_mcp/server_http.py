@@ -192,7 +192,14 @@ class NetOpsMCPHTTPServer:
                     AuthenticationMiddleware,
                     api_keys=security.api_keys,
                     require_auth=True,
-                    exempt_paths={"/health", "/metrics"},
+                    # WR-02: /metrics is NOT auth-exempt. The default bind is
+                    # 0.0.0.0, so an unauthenticated Prometheus dump would
+                    # disclose request paths/status/per-label counts to any
+                    # origin that can reach the port. Only /health stays public
+                    # (container/orchestrator liveness probes). Scrapers must
+                    # send the API key; /metrics remains rate-limit-exempt below
+                    # so authenticated scraping is never throttled.
+                    exempt_paths={"/health"},
                 )
             )
 

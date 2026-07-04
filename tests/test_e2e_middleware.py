@@ -92,13 +92,42 @@ def test_over_limit_returns_429(live_server_factory):
 
 
 def test_metrics_counter_increments(live_server):
-    """MetricsMiddleware on the served app counts a known request (delta-based)."""
-    base_url, _key, _server = live_server
-    before = _http_requests_total(httpx.get(base_url + "/metrics", timeout=5).text)
+    """MetricsMiddleware on the served app counts a known request (delta-based).
+
+    WR-02: /metrics is now auth-gated (only /health stays public), so the scrape
+    requests carry the Bearer key; /health remains key-free.
+    """
+    base_url, key, _server = live_server
+    metrics_headers = {"Authorization": f"Bearer {key}"}
+    before = _http_requests_total(
+        httpx.get(base_url + "/metrics", headers=metrics_headers, timeout=5).text
+    )
     # /health is auth+rate exempt but IS counted by MetricsMiddleware.
     assert httpx.get(base_url + "/health", timeout=5).status_code == 200
-    after = _http_requests_total(httpx.get(base_url + "/metrics", timeout=5).text)
+    after = _http_requests_total(
+        httpx.get(base_url + "/metrics", headers=metrics_headers, timeout=5).text
+    )
     assert after > before
+
+
+def test_metrics_requires_auth(live_server):
+    """WR-02: unauthenticated /metrics is rejected; /health stays public.
+
+    On the default 0.0.0.0 bind an open /metrics would disclose request
+    paths/status/per-label counts to any origin. Gating it behind auth closes
+    that net-new Phase 3 exposure; /health remains key-free for liveness probes.
+    """
+    base_url, key, _server = live_server
+    # No key -> 401 from AuthenticationMiddleware.
+    assert httpx.get(base_url + "/metrics", timeout=5).status_code == 401
+    # Valid key -> 200 Prometheus dump.
+    ok = httpx.get(
+        base_url + "/metrics", headers={"Authorization": f"Bearer {key}"}, timeout=5
+    )
+    assert ok.status_code == 200
+    assert "http_requests_total" in ok.text
+    # /health is still reachable without a key.
+    assert httpx.get(base_url + "/health", timeout=5).status_code == 200
 
 
 def test_auth_middleware_on_the_served_app(live_server):

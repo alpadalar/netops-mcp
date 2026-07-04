@@ -99,12 +99,15 @@ class TestSystemCheck:
         
         assert isinstance(info, dict)
         assert 'platform' in info
+        # BUG-02 regression: get_system_info must expose platform_version
+        assert 'platform_version' in info
+        assert info['platform_version'] == platform.version()
         assert 'python_version' in info
         assert 'architecture' in info
         assert 'hostname' in info
         assert 'cpu_count' in info
         assert 'memory_total' in info
-        
+
         assert info['platform'] == platform.system()
         assert info['python_version'] == platform.python_version()
         assert info['architecture'] == platform.machine()
@@ -285,17 +288,26 @@ class TestSystemCheck:
         assert cpu['usage_percent'] == 25.5
 
     def test_required_tools_list(self):
-        """Test that the required tools list contains expected tools."""
+        """Test that the required tools list contains expected tools.
+
+        BUG-05 regression: httpie installs its CLI as the `http` binary, so
+        REQUIRED_TOOLS must list 'http' — never the package name 'httpie',
+        which does not exist as an executable and is always reported missing.
+        """
         from netops_mcp.utils.system_check import REQUIRED_TOOLS
-        
+
         expected_tools = [
             'ping', 'traceroute', 'mtr', 'telnet', 'nc', 'curl',
             'nslookup', 'dig', 'host', 'nmap', 'ss', 'netstat',
-            'arp', 'arping', 'httpie'
+            'arp', 'arping', 'http'
         ]
-        
+
         for tool in expected_tools:
             assert tool in REQUIRED_TOOLS
+
+        # BUG-05 locked regression assertions
+        assert 'http' in REQUIRED_TOOLS
+        assert 'httpie' not in REQUIRED_TOOLS
 
     @patch('netops_mcp.utils.system_check.subprocess.run')
     def test_tool_check_with_version_flag(self, mock_run):
@@ -303,18 +315,50 @@ class TestSystemCheck:
         mock_run.return_value = Mock(returncode=0, stdout=b"version info")
         
         is_tool_available('curl')
-        
+
         # Check that the command includes --version or -V
         call_args = mock_run.call_args
         command = ' '.join(call_args[0][0])
         assert '--version' in command or '-V' in command
+
+    @patch('netops_mcp.utils.system_check.subprocess.run')
+    def test_is_tool_available_http_branch(self, mock_run):
+        """BUG-05: is_tool_available('http') must probe the real `http` binary.
+
+        NOTE: this test passes pre-fix too, because the generic `else`
+        fallback already runs [tool_name, '--version'] — behaviorally
+        indistinguishable from the required explicit branch. The explicit
+        `elif tool_name == 'http':` branch is enforced by Task 2's
+        source-level acceptance criteria, not by this test.
+        """
+        mock_run.return_value = Mock(returncode=0)
+
+        result = is_tool_available('http')
+
+        assert result is True
+        assert mock_run.call_args[0][0] == ['http', '--version']
+
+    @patch('netops_mcp.utils.system_check.subprocess.run')
+    def test_get_tool_version_http_branch(self, mock_run):
+        """BUG-05: get_tool_version('http') must probe the real `http` binary.
+
+        NOTE: passes pre-fix via the `else` fallback (see
+        test_is_tool_available_http_branch); the explicit-branch requirement
+        is enforced by Task 2's source-level acceptance criteria.
+        """
+        mock_run.return_value = Mock(returncode=0, stdout="3.2.4\n")
+
+        version = get_tool_version('http')
+
+        assert version == "3.2.4"
+        assert mock_run.call_args[0][0] == ['http', '--version']
 
     def test_system_info_structure(self):
         """Test that system info has the correct structure."""
         info = get_system_info()
         
         required_keys = [
-            'platform', 'python_version', 'architecture',
+            'platform', 'platform_version', 'python_version', 'architecture',
             'hostname', 'cpu_count', 'memory_total'
         ]
         

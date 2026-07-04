@@ -62,11 +62,17 @@ class NetOpsTool:
         try:
             self.logger.debug(f"Executing command: {' '.join(command)}")
             
+            # stdin=DEVNULL: capture_output only redirects stdout/stderr, so
+            # without this every child inherits the server's fd 0 — which in
+            # stdio transport mode IS the MCP JSON-RPC stream. Interactive
+            # children (e.g. telnet) would consume protocol bytes and forward
+            # them to an arbitrary remote host (CR-01).
             result = subprocess.run(
                 command,
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
+                stdin=subprocess.DEVNULL
             )
             
             return {

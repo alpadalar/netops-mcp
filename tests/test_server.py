@@ -155,8 +155,11 @@ class TestNetOpsMCPServer:
                    return_value=dict(FAKE_TOOL_STATUS)), \
              patch('netops_mcp.tools.registry.get_system_info',
                    return_value=dict(FAKE_SYSTEM_INFO)), \
-             patch('netops_mcp.server_http.NetOpsMCPHTTPServer._setup_health_check',
-                   lambda self: None):
+             patch('netops_mcp.server_http.check_tools_status',
+                   return_value=dict(FAKE_TOOL_STATUS)):
+            # 03-04 deleted _setup_health_check; the PERF-03 startup cache call
+            # (server_http.check_tools_status) is patched instead so construction
+            # forks no subprocesses.
             server = NetOpsMCPHTTPServer()
             tools = asyncio.run(server.mcp.get_tools())
             # fastmcp 2.11.3 FunctionTool keeps the original closure on `fn`

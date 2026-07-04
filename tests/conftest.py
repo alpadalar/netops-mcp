@@ -379,3 +379,109 @@ def test_urls():
         "https://httpbin.org/status/404",
         "https://httpbin.org/delay/1"
     ]
+
+
+# ---------------------------------------------------------------------------
+# Live-uvicorn E2E harness (TEST-02 / REF-07)
+#
+# A real ephemeral-port uvicorn server driving
+# NetOpsMCPHTTPServer.build_http_app() in a daemon thread. NOT Starlette's
+# TestClient (which can pass even with broken served-app wiring) and NOT
+# server.run() (signal.signal raises "signal only works in main thread" off the
+# main thread). This is the phase's runtime proof that middleware is attached to
+# the ACTUALLY-served app.
+# ---------------------------------------------------------------------------
+import hashlib
+import json as _json
+import socket
+import threading
+import time as _time
+from contextlib import contextmanager
+
+import httpx
+import uvicorn
+
+# Plaintext API key + its stored 'sha256:<64-hex>' digest (the config form the
+# SecurityConfig validator mandates). Bearer requests send the plaintext key.
+E2E_PLAIN_KEY = "e2e-test-key"
+E2E_KEY_DIGEST = "sha256:" + hashlib.sha256(E2E_PLAIN_KEY.encode()).hexdigest()
+
+
+def _free_port() -> int:
+    """Grab a free ephemeral loopback port (avoids fixed-port collisions)."""
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return port
+
+
+@contextmanager
+def run_live_server(security_overrides=None):
+    """Start a real uvicorn server on an ephemeral port; yield (base_url, key, server).
+
+    Builds the ACTUALLY-served app via ``server.build_http_app()`` and drives
+    ``uvicorn.Server(...).run()`` in a daemon thread — ``server.run()`` would
+    call ``signal.signal`` off the main thread and raise ``ValueError``.
+    Readiness is a ``GET /health`` poll loop (not a fixed sleep); teardown flips
+    ``should_exit`` and joins the thread.
+    """
+    from netops_mcp.server_http import NetOpsMCPHTTPServer
+
+    security = {"require_auth": True, "api_keys": [E2E_KEY_DIGEST]}
+    if security_overrides:
+        security.update(security_overrides)
+
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+        _json.dump({"security": security}, handle)
+        config_path = handle.name
+
+    port = _free_port()
+    server = NetOpsMCPHTTPServer(config_path=config_path, host="127.0.0.1", port=port)
+    app = server.build_http_app()
+    uv = uvicorn.Server(
+        uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", lifespan="on")
+    )
+    thread = threading.Thread(target=uv.run, daemon=True)
+    thread.start()
+
+    base_url = f"http://127.0.0.1:{port}"
+    try:
+        ready = False
+        for _ in range(200):  # ~6s cap; genuine poll loop, not a blind wait
+            try:
+                if httpx.get(base_url + "/health", timeout=0.5).status_code == 200:
+                    ready = True
+                    break
+            except httpx.HTTPError:
+                pass
+            _time.sleep(0.03)
+        if not ready:
+            raise RuntimeError("live E2E server did not become ready in time")
+        yield base_url, E2E_PLAIN_KEY, server
+    finally:
+        uv.should_exit = True
+        thread.join(timeout=5)
+        try:
+            os.unlink(config_path)
+        except OSError:
+            pass
+
+
+@pytest.fixture(scope="module")
+def live_server():
+    """Module-scoped live server with a GENEROUS rate limit.
+
+    The generous limit keeps the fastmcp Client handshake and the /metrics
+    probes from being throttled; the over-limit 429 case uses
+    ``live_server_factory`` with a tight limit instead.
+    """
+    with run_live_server({"rate_limit_requests": 100, "rate_limit_window": 60}) as ctx:
+        yield ctx
+
+
+@pytest.fixture
+def live_server_factory():
+    """Return the ``run_live_server`` context manager for per-test configs
+    (e.g. a tight rate limit for the over-limit 429 assertion)."""
+    return run_live_server

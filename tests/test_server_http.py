@@ -82,8 +82,12 @@ class TestNetOpsMCPHTTPServer:
         with patch('netops_mcp.server_http.load_config', return_value=config):
             server = NetOpsMCPHTTPServer()
 
-        # Mock the mcp.run method to avoid actually starting the server
-        with patch.object(server.mcp, 'run') as mock_run:
+        # REF-07: run() now builds the served app via build_http_app() and drives
+        # uvicorn.Server directly (no more self.mcp.run). Stub both so run() does
+        # not bind a real port while still exercising the signal/serve path.
+        with patch.object(NetOpsMCPHTTPServer, 'build_http_app') as mock_build, \
+             patch('uvicorn.Config'), \
+             patch('uvicorn.Server') as mock_uv_server:
             try:
                 server.run()
             except SystemExit:
@@ -91,6 +95,8 @@ class TestNetOpsMCPHTTPServer:
 
         # Check that signal handlers were set up
         assert mock_signal.call_count >= 2
+        mock_build.assert_called_once()
+        mock_uv_server.return_value.run.assert_called_once()
 
     def test_default_parameters(self):
         """Test server initialization with default parameters."""
@@ -207,18 +213,20 @@ class TestAuthGate:
         """Default config (require_auth=True, empty api_keys) must refuse to run."""
         server = NetOpsMCPHTTPServer()
 
-        with patch.object(server.mcp, 'run') as mock_run:
+        # The gate raises BEFORE the served app is built; build_http_app must
+        # never be reached (REF-07: no app is served when the gate blocks).
+        with patch.object(NetOpsMCPHTTPServer, 'build_http_app') as mock_build:
             with pytest.raises(RuntimeError):
                 server.run()
 
-        mock_run.assert_not_called()
+        mock_build.assert_not_called()
 
     @patch('netops_mcp.server_http.signal.signal')
     def test_gate_message_operator_guidance(self, mock_signal):
         """Gate error carries a CSPRNG example key, its sha256: digest and opt-out."""
         server = NetOpsMCPHTTPServer()
 
-        with patch.object(server.mcp, 'run'):
+        with patch.object(NetOpsMCPHTTPServer, 'build_http_app'):
             with pytest.raises(RuntimeError) as excinfo:
                 server.run()
 
@@ -230,20 +238,23 @@ class TestAuthGate:
 
     @patch('netops_mcp.server_http.signal.signal')
     def test_gate_open_when_auth_disabled(self, mock_signal):
-        """Explicit require_auth=False opt-out lets run() reach mcp.run."""
+        """Explicit require_auth=False opt-out lets run() reach the served app."""
         config = Config()
         config.security.require_auth = False
 
         with patch('netops_mcp.server_http.load_config', return_value=config):
             server = NetOpsMCPHTTPServer()
 
-        with patch.object(server.mcp, 'run') as mock_run:
+        with patch.object(NetOpsMCPHTTPServer, 'build_http_app') as mock_build, \
+             patch('uvicorn.Config'), \
+             patch('uvicorn.Server') as mock_uv_server:
             try:
                 server.run()
             except SystemExit:
                 pass
 
-        mock_run.assert_called_once()
+        mock_build.assert_called_once()
+        mock_uv_server.return_value.run.assert_called_once()
 
     @patch('netops_mcp.server_http.signal.signal')
     def test_gate_open_with_hashed_key(self, mock_signal):
@@ -254,13 +265,16 @@ class TestAuthGate:
         with patch('netops_mcp.server_http.load_config', return_value=config):
             server = NetOpsMCPHTTPServer()
 
-        with patch.object(server.mcp, 'run') as mock_run:
+        with patch.object(NetOpsMCPHTTPServer, 'build_http_app') as mock_build, \
+             patch('uvicorn.Config'), \
+             patch('uvicorn.Server') as mock_uv_server:
             try:
                 server.run()
             except SystemExit:
                 pass
 
-        mock_run.assert_called_once()
+        mock_build.assert_called_once()
+        mock_uv_server.return_value.run.assert_called_once()
 
     def test_construction_never_raises(self):
         """Bare construction under default (auth-on, keyless) config must not raise."""

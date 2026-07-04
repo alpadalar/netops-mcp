@@ -130,6 +130,40 @@ def test_metrics_requires_auth(live_server):
     assert httpx.get(base_url + "/health", timeout=5).status_code == 200
 
 
+def test_cors_preflight_not_blocked_by_auth(live_server_factory):
+    """WR-04: a CORS preflight OPTIONS is answered by CORS, never 401'd by auth.
+
+    A browser preflight is an ``OPTIONS`` carrying ``Origin`` +
+    ``Access-Control-Request-Method`` but NO ``Authorization`` header. With
+    ``CORSMiddleware`` ordered OUTERMOST it short-circuits the preflight with the
+    ``Access-Control-Allow-*`` headers before ``AuthenticationMiddleware`` runs.
+    If CORS were ordered inside Auth (the pre-fix layout) this preflight would
+    get 401 and carry no ACAO header — so this assertion goes RED on regress.
+    """
+    origin = "http://localhost:3000"
+    with live_server_factory(
+        {
+            "enable_cors": True,
+            "cors_origins": [origin],
+            "rate_limit_requests": 100,
+            "rate_limit_window": 60,
+        }
+    ) as (base_url, _key, _server):
+        response = httpx.request(
+            "OPTIONS",
+            base_url + MCP_PATH,
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+            },
+            timeout=5,
+        )
+
+    # Preflight must NOT be rejected by auth and MUST carry CORS headers.
+    assert response.status_code != 401
+    assert response.headers.get("access-control-allow-origin") == origin
+
+
 def test_auth_middleware_on_the_served_app(live_server):
     """Anti-tautology guard: auth + rate-limit middleware live on the SERVED app.
 

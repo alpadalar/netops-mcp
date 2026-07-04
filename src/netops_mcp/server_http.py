@@ -163,11 +163,30 @@ class NetOpsMCPHTTPServer:
         Middleware ordering trap (RESEARCH Pitfall 3): ``add_middleware`` is
         LIFO/prepend (last added = outermost), but a ``Middleware([...])`` list
         is applied first=outermost. The list is therefore built in
-        outermost->inner order ``[TrustedHost, Auth, RateLimit, CORS, Metrics]``
-        to preserve the request flow the former ``_add_middleware`` produced.
+        outermost->inner order ``[CORS, TrustedHost, Auth, RateLimit, Metrics]``.
+
+        WR-04: ``CORSMiddleware`` is placed OUTERMOST so a browser CORS preflight
+        (an ``OPTIONS`` carrying ``Origin``/``Access-Control-Request-Method`` but
+        NO ``Authorization`` header — browsers never send credentials on
+        preflight) is short-circuited with the ``Access-Control-Allow-*`` headers
+        BEFORE ``AuthenticationMiddleware`` can reject it with a 401. Ordering
+        CORS inside Auth (the former layout) made cross-origin authenticated
+        clients unusable: the preflight got 401'd and the browser blocked the
+        real request.
         """
         security = self.config.security
         middleware = []
+
+        if security.enable_cors:
+            middleware.append(
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=security.cors_origins,
+                    allow_credentials=security.cors_allow_credentials,
+                    allow_methods=["*"],
+                    allow_headers=["*"],
+                )
+            )
 
         if security.allowed_hosts:
             middleware.append(
@@ -211,17 +230,6 @@ class NetOpsMCPHTTPServer:
                 exempt_paths={"/health", "/metrics"},
             )
         )
-
-        if security.enable_cors:
-            middleware.append(
-                Middleware(
-                    CORSMiddleware,
-                    allow_origins=security.cors_origins,
-                    allow_credentials=security.cors_allow_credentials,
-                    allow_methods=["*"],
-                    allow_headers=["*"],
-                )
-            )
 
         middleware.append(Middleware(MetricsMiddleware))
 

@@ -340,7 +340,7 @@ def check_privileged_access() -> Dict[str, bool]:
         result = _run(['ping', '-c', '1', '127.0.0.1'], 
                               capture_output=True, timeout=5)
         checks['can_ping'] = result.returncode == 0
-    except:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
         pass
     
     try:
@@ -348,7 +348,7 @@ def check_privileged_access() -> Dict[str, bool]:
         result = _run(['traceroute', '-m', '1', '127.0.0.1'], 
                               capture_output=True, timeout=5)
         checks['can_traceroute'] = result.returncode == 0
-    except:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
         pass
     
     try:
@@ -356,7 +356,7 @@ def check_privileged_access() -> Dict[str, bool]:
         result = _run(['nmap', '-sn', '127.0.0.1'], 
                               capture_output=True, timeout=5)
         checks['can_nmap'] = result.returncode == 0
-    except:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
         pass
     
     try:
@@ -364,7 +364,7 @@ def check_privileged_access() -> Dict[str, bool]:
         result = _run(['arp', '-a'], 
                               capture_output=True, timeout=5)
         checks['can_arp'] = result.returncode == 0
-    except:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError):
         pass
     
     return checks

@@ -19,12 +19,11 @@ plain-retention bug — they are RED until the middleware rewrite lands.
 import hashlib
 from unittest.mock import Mock
 
+from netops_mcp.middleware.auth import AuthenticationMiddleware
 from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
-
-from netops_mcp.middleware.auth import AuthenticationMiddleware
 
 PLAIN_KEY = "test-key-123"
 STORED_DIGEST = "sha256:" + hashlib.sha256(PLAIN_KEY.encode()).hexdigest()

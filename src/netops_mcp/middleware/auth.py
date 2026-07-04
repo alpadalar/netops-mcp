@@ -7,12 +7,14 @@ to be accessible without authentication (e.g., health checks).
 """
 
 import hashlib
-import secrets
+import hmac
 import logging
-from typing import Optional, List, Set, Callable, Awaitable
+import secrets
+from typing import Awaitable, Callable, List, Optional, Set
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 logger = logging.getLogger("netops-mcp.auth")
@@ -38,21 +40,21 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     ):
         """
         Initialize authentication middleware.
-        
+
         Args:
             app: ASGI application
-            api_keys: List of valid API keys (hashed or plain)
+            api_keys: List of 'sha256:<64-hex>' API key digests
+                (format guaranteed by the SecurityConfig validator)
             require_auth: Whether authentication is required
             exempt_paths: Set of paths that don't require authentication
         """
         super().__init__(app)
-        self.api_keys = api_keys
         self.require_auth = require_auth
         self.exempt_paths = exempt_paths or {"/health", "/metrics"}
-        
-        # Hash API keys for secure comparison
-        self.hashed_keys = {self._hash_key(key) for key in api_keys}
-        
+
+        # Store only stripped digests — no plain keys are retained
+        self._digests: List[str] = [k.removeprefix("sha256:") for k in api_keys]
+
         logger.info(f"Authentication middleware initialized with {len(api_keys)} keys")
         logger.info(f"Exempt paths: {self.exempt_paths}")
         logger.info(f"Authentication required: {require_auth}")
@@ -91,27 +93,37 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         
         return None
     
+    def _validate_digest(self, digest: str) -> bool:
+        """
+        Compare a sha256 hex digest against stored digests in constant time.
+
+        Args:
+            digest: sha256 hex digest of the incoming API key
+
+        Returns:
+            True if the digest matches any stored digest, False otherwise
+
+        Note:
+            any() over hmac.compare_digest leaks only the key COUNT,
+            never key content or match position timing.
+        """
+        return any(hmac.compare_digest(digest, stored) for stored in self._digests)
+
     def _validate_api_key(self, api_key: str) -> bool:
         """
-        Validate an API key against stored keys.
-        
+        Validate a plain API key against stored sha256 digests.
+
         Args:
-            api_key: The API key to validate
-            
+            api_key: The plain API key to validate
+
         Returns:
             True if valid, False otherwise
         """
-        # Check if the key matches any stored key (plain or hashed)
-        if api_key in self.api_keys:
-            return True
-        
-        # Check hashed version
-        hashed = self._hash_key(api_key)
-        return hashed in self.hashed_keys
+        return self._validate_digest(self._hash_key(api_key))
     
     async def dispatch(
-        self, request: Request, call_next: Callable[[Request], Awaitable]
-    ):
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """
         Process the request and validate authentication.
         
@@ -149,8 +161,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 }
             )
         
-        # Validate API key
-        if not self._validate_api_key(api_key):
+        # Validate API key (digest computed once, reused for logging state)
+        digest = self._hash_key(api_key)
+        if not self._validate_digest(digest):
             logger.warning(f"Invalid API key attempt for {path}")
             return JSONResponse(
                 status_code=403,
@@ -159,14 +172,14 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     "message": "The provided API key is not valid"
                 }
             )
-        
+
         # API key is valid, proceed with request
         logger.debug(f"Valid API key provided for {path}")
-        
+
         # Add authentication info to request state
         request.state.authenticated = True
-        request.state.api_key_hash = self._hash_key(api_key)[:8]  # Store partial hash for logging
-        
+        request.state.api_key_hash = digest[:8]  # Store partial digest for logging
+
         return await call_next(request)
 
 

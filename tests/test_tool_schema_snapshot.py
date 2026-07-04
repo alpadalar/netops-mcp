@@ -37,6 +37,12 @@ FAKE_TOOL_STATUS: Dict[str, Any] = {
 }
 FAKE_SYSTEM_INFO: Dict[str, Any] = {
     "platform": "Linux",
+    # platform_version is REQUIRED (WR-07): server.py's
+    # _test_system_requirements reads it; omitting it made server
+    # construction silently exercise the swallowed-KeyError path
+    # (the exact fixture drift BUG-02 guarded against, see
+    # tests/test_server.py FAKE_SYSTEM_INFO discipline).
+    "platform_version": "6.0.0-test",
     "python_version": "3.11",
     "architecture": "x86_64",
     "hostname": "test",

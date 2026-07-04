@@ -159,6 +159,18 @@ result = nmap_scan("192.168.1.1", ports="1-1000", scan_type="basic")
 > unaffected.** To opt out explicitly, set `"require_auth": false` in the
 > config file (NOT recommended).
 
+> **⚠️ Known limitation (until Phase 3):** What is active today is the
+> **fail-fast startup gate** — with `require_auth: true` and no key
+> configured, the server refuses to start (see *First Run* below). **Per-request
+> enforcement is not yet wired to the served endpoint:** the authentication,
+> rate-limiting, and CORS middleware are not yet applied to the live HTTP app,
+> so once a key is configured the server starts but does **not** currently
+> reject keyless requests at runtime. Wiring the middleware to the served app
+> (and the end-to-end tests that prove it) lands in **Phase 3 (REF-07)**. Until
+> then, do **not** expose the HTTP endpoint on an untrusted network assuming
+> requests are authenticated — run it only on a trusted/isolated network or
+> behind an authenticating reverse proxy. stdio mode is unaffected.
+
 ### First Run
 
 Starting the HTTP server with no API keys configured fails fast — the server
@@ -221,6 +233,11 @@ keys are rejected at config load time:
 
 ### Making Authenticated Requests
 
+> **Note:** this is the request format clients will use once per-request
+> enforcement is wired to the served endpoint in **Phase 3 (REF-07)** — see the
+> *Known limitation* note above. Today the server does not yet reject keyless
+> requests at runtime.
+
 Clients send the **plain** key (not the digest); the server hashes it and
 compares digests in constant time. Three header forms are accepted:
 
@@ -230,7 +247,8 @@ curl -H "X-API-Key: YOUR-KEY" http://localhost:8815/netops-mcp
 curl -H "API-Key: YOUR-KEY" http://localhost:8815/netops-mcp
 ```
 
-`/health` and `/metrics` are exempt from authentication.
+`/health` and `/metrics` are exempt paths in the auth middleware (relevant once
+the middleware is wired to the served app in Phase 3).
 
 ### Opting Out (NOT recommended)
 
@@ -565,7 +583,7 @@ curl -X POST http://localhost:8815/netops-mcp \
 ### Network Security
 
 - **Firewall Rules**: Configure appropriate firewall rules for the server port
-- **Access Control**: API key authentication is required by default in HTTP mode (see [Authentication](#-authentication-breaking-change))
+- **Access Control**: HTTP mode fails fast on a keyless start by default (`require_auth: true`). Note that per-request API-key enforcement on the served endpoint lands in Phase 3 (REF-07) — see the *Known limitation* note under [Authentication](#-authentication-breaking-change)
 - **Network Isolation**: Run in isolated network environments when possible
 
 ### Tool Security
@@ -618,8 +636,10 @@ curl -X POST http://localhost:8815/netops-mcp \
 
 ### Authentication
 
-API key authentication is **required by default** in HTTP mode — clients send
-the plain key, the server stores and compares only `sha256:` digests. Full
+HTTP mode **refuses to start without a key by default** (`require_auth: true`),
+and the server stores and compares only `sha256:` digests — clients send the
+plain key. Note that **per-request enforcement on the served endpoint is not yet
+active** (lands in Phase 3 / REF-07); see the *Known limitation* note. Full
 details (key generation, hashing, opt-out) are in
 [Authentication](#-authentication-breaking-change):
 
@@ -653,16 +673,22 @@ server {
 
 ### Production Features
 
-- ✅ **API Key Authentication**: Secure access control with Bearer tokens
-- ✅ **Rate Limiting**: Built-in rate limiting (100 req/min default)
 - ✅ **Input Validation**: Comprehensive input sanitization
 - ✅ **Structured Logging**: JSON logging for production environments
-- ✅ **Health Checks**: Built-in health check endpoints
 - ✅ **Docker Support**: Production-ready Docker image with multi-stage build
 - ✅ **Non-Root User**: Runs as unprivileged user in container
 - ✅ **Resource Limits**: Configurable CPU and memory limits
-- ✅ **CORS Support**: Configurable CORS for web applications
-- ✅ **Security Headers**: Automatic security headers
+- ✅ **Auth Startup Gate**: HTTP mode fails fast on a keyless start (`require_auth: true`)
+
+The following are implemented and configurable but are **not yet wired to the
+served HTTP app** — enforcement lands in **Phase 3 (REF-07)** (see the *Known
+limitation* note under [Authentication](#-authentication-breaking-change)):
+
+- 🔜 **Per-request API Key Authentication**: Bearer / X-API-Key / API-Key headers
+- 🔜 **Rate Limiting**: Built-in rate limiting (100 req/min default)
+- 🔜 **Health Checks**: `/health` and `/metrics` endpoints
+- 🔜 **CORS Support**: Configurable CORS for web applications
+- 🔜 **Security Headers**: Automatic security headers
 
 ### CI/CD Pipeline
 

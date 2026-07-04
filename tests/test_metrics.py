@@ -28,6 +28,32 @@ class TestMetricsCollector:
         """Build a fresh collector so state never bleeds across tests."""
         self.collector = MetricsCollector()
 
+    def test_export_byte_compatible(self):
+        """Scalar accumulation emits the exact pre-refactor _sum/_count lines."""
+        # Two HTTP requests for one label: sum 0.5+1.5=2.0, count 2.
+        self.collector.record_http_request("GET", "/x", 200, 0.5)
+        self.collector.record_http_request("GET", "/x", 200, 1.5)
+        # Two tool executions for one tool: sum 0.25+0.75=1.0, count 2.
+        self.collector.record_tool_execution("ping", 0.25, True)
+        self.collector.record_tool_execution("ping", 0.75, True)
+
+        export = self.collector.export_prometheus()
+
+        # Exact Prometheus text-format lines the list-based export produced.
+        assert (
+            'http_request_duration_seconds_sum{method="GET",path="/x",status="200"} 2.000000'
+            in export
+        )
+        assert (
+            'http_request_duration_seconds_count{method="GET",path="/x",status="200"} 2' in export
+        )
+        assert 'tool_execution_duration_seconds_sum{tool="ping"} 1.000000' in export
+        assert 'tool_execution_duration_seconds_count{tool="ping"} 2' in export
+
+        # HELP/TYPE histogram headers are preserved so the export byte-matches.
+        assert "# TYPE http_request_duration_seconds histogram" in export
+        assert "# TYPE tool_execution_duration_seconds histogram" in export
+
     def test_duration_storage_is_bounded(self):
         """Durations accumulate as sum+count scalars, never a per-sample list."""
         n = 1000

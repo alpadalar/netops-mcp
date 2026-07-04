@@ -38,6 +38,13 @@ EXPECTED_PING_SUCCESS_JSON = (
     '}'
 )
 
+# Intentional behavior change (WR-02, code review fix iteration 2):
+# parse_traceroute_output now takes the hop IP from the parenthesized "(ip)"
+# token that default (resolving) traceroute prints after the hostname, so
+# "ip" carries a real IP instead of duplicating the hostname. Constant
+# regenerated from the fixed parser output; only the two hops whose host is
+# not already an IP changed ("_gateway" -> "192.168.1.1", "google.com" ->
+# "142.250.185.78"); raw_output (and everything else) is unchanged.
 EXPECTED_TRACEROUTE_SUCCESS_JSON = (
     '{\n'
     '  "target": "google.com",\n'
@@ -46,7 +53,7 @@ EXPECTED_TRACEROUTE_SUCCESS_JSON = (
     '    {\n'
     '      "hop_number": 1,\n'
     '      "host": "_gateway",\n'
-    '      "ip": "_gateway",\n'
+    '      "ip": "192.168.1.1",\n'
     '      "times": [\n'
     '        1.234,\n'
     '        0.987,\n'
@@ -82,7 +89,7 @@ EXPECTED_TRACEROUTE_SUCCESS_JSON = (
     '    {\n'
     '      "hop_number": 5,\n'
     '      "host": "google.com",\n'
-    '      "ip": "google.com",\n'
+    '      "ip": "142.250.185.78",\n'
     '      "times": [\n'
     '        15.678,\n'
     '        15.432,\n'

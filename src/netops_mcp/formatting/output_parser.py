@@ -94,15 +94,25 @@ class OutputParser:
                         hop_number = int(parts[0])
                     except ValueError:
                         continue  # not a hop line
+                    # WR-02: default (resolving) traceroute prints
+                    # "hostname (ip)", so the real IP is the parenthesized
+                    # token in parts[2] — not parts[1]. With -n output or
+                    # silent "* * *" hops there is no such token and host/ip
+                    # stay identical.
+                    ip = parts[1]
+                    times_start = 2
+                    if len(parts) > 2 and parts[2].startswith('(') and parts[2].endswith(')'):
+                        ip = parts[2][1:-1]
+                        times_start = 3
                     hop_info = {
                         "hop_number": hop_number,
                         "host": parts[1],
-                        "ip": parts[1],
+                        "ip": ip,
                         "times": []
                     }
-                    
+
                     # Extract response times
-                    for part in parts[2:]:
+                    for part in parts[times_start:]:
                         if part != '*':
                             try:
                                 hop_info["times"].append(float(part))

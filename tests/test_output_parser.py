@@ -136,14 +136,18 @@ class TestParseTracerouteOutput:
         assert len(hops) == 5
         assert hops[0]["hop_number"] == 1
         assert hops[0]["host"] == "_gateway"
-        assert hops[0]["ip"] == "_gateway"
+        # WR-02: ip comes from the parenthesized "(ip)" token, not the hostname
+        assert hops[0]["ip"] == "192.168.1.1"
         assert hops[0]["times"] == [1.234, 0.987, 1.123]
-        # Timeout hop (* * *) is kept with empty times
+        # Timeout hop (* * *) is kept with empty times; no "(ip)" token, so
+        # host and ip stay identical
         assert hops[3]["hop_number"] == 4
         assert hops[3]["host"] == "*"
+        assert hops[3]["ip"] == "*"
         assert hops[3]["times"] == []
         assert hops[4]["hop_number"] == 5
         assert hops[4]["host"] == "google.com"
+        assert hops[4]["ip"] == "142.250.185.78"
         assert hops[4]["times"] == [15.678, 15.432, 15.567]
 
     def test_parse_traceroute_output_skips_continuation_lines(self):

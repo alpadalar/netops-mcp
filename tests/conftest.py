@@ -115,6 +115,65 @@ rtt min/avg/max/mdev = 1.230/1.395/1.560/0.134 ms""",
 
 
 @pytest.fixture
+def sample_ping_unreachable_output():
+    """Sample ping output for an unreachable host (100% loss, exit 1)."""
+    return {
+        "success": False,
+        "stdout": """PING 192.0.2.1 (192.0.2.1) 56(84) bytes of data.
+
+--- 192.0.2.1 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 301ms
+""",
+        "stderr": "",
+        "return_code": 1,
+        "command": "ping -c 4 -W 10 192.0.2.1"
+    }
+
+
+@pytest.fixture
+def sample_ping_partial_loss_output():
+    """Sample ping output with partial packet loss (exit 0)."""
+    return {
+        "success": True,
+        "stdout": """PING google.com (142.250.185.78) 56(84) bytes of data.
+64 bytes from google.com (142.250.185.78): icmp_seq=1 time=1.23 ms
+64 bytes from google.com (142.250.185.78): icmp_seq=3 time=1.45 ms
+
+--- google.com ping statistics ---
+4 packets transmitted, 2 received, 50% packet loss, time 3005ms
+rtt min/avg/max/mdev = 1.230/1.340/1.450/0.110 ms""",
+        "stderr": "",
+        "return_code": 0,
+        "command": "ping -c 4 -W 10 google.com"
+    }
+
+
+@pytest.fixture
+def sample_ping_zero_tx_output():
+    """Synthetic ping output with zero packets transmitted (exit 1)."""
+    return {
+        "success": False,
+        "stdout": """--- 8.8.8.8 ping statistics ---
+0 packets transmitted, 0 received, time 0ms""",
+        "stderr": "",
+        "return_code": 1,
+        "command": "ping -c 4 -W 10 8.8.8.8"
+    }
+
+
+@pytest.fixture
+def sample_ping_dns_failure_output():
+    """Sample ping output for a DNS resolution failure (exit 2)."""
+    return {
+        "success": False,
+        "stdout": "",
+        "stderr": "ping: nonexistent-host.invalid: Name or service not known",
+        "return_code": 2,
+        "command": "ping -c 4 -W 10 nonexistent-host.invalid"
+    }
+
+
+@pytest.fixture
 def sample_traceroute_output():
     """Sample traceroute command output."""
     return {

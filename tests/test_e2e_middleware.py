@@ -45,6 +45,24 @@ def _http_requests_total(metrics_text: str) -> int:
     return total
 
 
+def _http_requests_with_status(metrics_text: str, status: str) -> int:
+    """Sum ``http_requests_total`` samples carrying a specific status label."""
+    total = 0
+    needle = f'status="{status}"'
+    for line in metrics_text.splitlines():
+        if line.startswith("http_requests_total{") and needle in line:
+            total += int(line.rsplit(" ", 1)[1])
+    return total
+
+
+def _scalar_metric(metrics_text: str, name: str) -> int:
+    """Read a single unlabeled scalar counter (e.g. ``auth_failures_total``)."""
+    for line in metrics_text.splitlines():
+        if line.startswith(name + " "):
+            return int(line.rsplit(" ", 1)[1])
+    return 0
+
+
 def test_no_key_returns_401(live_server):
     """An unauthenticated MCP request is rejected by AuthenticationMiddleware (401)."""
     base_url, _key, _server = live_server
@@ -128,6 +146,54 @@ def test_metrics_requires_auth(live_server):
     assert "http_requests_total" in ok.text
     # /health is still reachable without a key.
     assert httpx.get(base_url + "/health", timeout=5).status_code == 200
+
+
+def test_rejected_requests_are_counted(live_server_factory):
+    """WR-05: 401/429 land in http_requests_total and the auth/rate counters live.
+
+    With MetricsMiddleware OUTERMOST, requests rejected by inner middleware
+    (401 from Auth, 429 from RateLimit) are now observed and counted — inner-most
+    placement never saw them. And ``record_auth_attempt`` /
+    ``record_rate_limit_hit`` are wired from the middlewares, so
+    ``auth_failures_total`` / ``rate_limit_hits_total`` are no longer exported as
+    permanent zeros. ``metrics_collector`` is a process-wide singleton, so
+    assertions are ``> 0`` against events THIS test provably generates.
+    """
+    with live_server_factory({"rate_limit_requests": 2, "rate_limit_window": 60}) as (
+        base_url,
+        key,
+        _server,
+    ):
+        # Generate a 401 (no key) ...
+        assert (
+            httpx.post(
+                base_url + MCP_PATH, json=_LIST_TOOLS, headers=_MCP_HEADERS, timeout=5
+            ).status_code
+            == 401
+        )
+        # ... and at least one 429 (authenticated, over the tight limit).
+        auth_headers = {"Authorization": f"Bearer {key}", **_MCP_HEADERS}
+        codes = [
+            httpx.post(
+                base_url + MCP_PATH, json=_LIST_TOOLS, headers=auth_headers, timeout=5
+            ).status_code
+            for _ in range(5)
+        ]
+        assert 429 in codes
+
+        metrics_text = httpx.get(
+            base_url + "/metrics",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=5,
+        ).text
+
+    # Metrics (outermost) now records the rejected requests.
+    assert _http_requests_with_status(metrics_text, "401") > 0
+    assert _http_requests_with_status(metrics_text, "429") > 0
+    # Previously-dead counters are now live telemetry.
+    assert _scalar_metric(metrics_text, "auth_attempts_total") > 0
+    assert _scalar_metric(metrics_text, "auth_failures_total") > 0
+    assert _scalar_metric(metrics_text, "rate_limit_hits_total") > 0
 
 
 def test_cors_preflight_not_blocked_by_auth(live_server_factory):

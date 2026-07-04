@@ -163,19 +163,29 @@ class NetOpsMCPHTTPServer:
         Middleware ordering trap (RESEARCH Pitfall 3): ``add_middleware`` is
         LIFO/prepend (last added = outermost), but a ``Middleware([...])`` list
         is applied first=outermost. The list is therefore built in
-        outermost->inner order ``[CORS, TrustedHost, Auth, RateLimit, Metrics]``.
+        outermost->inner order ``[Metrics, CORS, TrustedHost, Auth, RateLimit]``.
 
-        WR-04: ``CORSMiddleware`` is placed OUTERMOST so a browser CORS preflight
-        (an ``OPTIONS`` carrying ``Origin``/``Access-Control-Request-Method`` but
-        NO ``Authorization`` header — browsers never send credentials on
-        preflight) is short-circuited with the ``Access-Control-Allow-*`` headers
-        BEFORE ``AuthenticationMiddleware`` can reject it with a 401. Ordering
-        CORS inside Auth (the former layout) made cross-origin authenticated
-        clients unusable: the preflight got 401'd and the browser blocked the
-        real request.
+        WR-05: ``MetricsMiddleware`` is OUTERMOST so it observes the FINAL status
+        of every request — including the ``401`` from Auth and the ``429`` from
+        RateLimit that inner-most placement never saw. Those rejections now land
+        in ``http_requests_total``. Only the counts change; the Prometheus line
+        format is byte-identical.
+
+        WR-04: ``CORSMiddleware`` sits OUTSIDE Auth (just inside Metrics) so a
+        browser CORS preflight (an ``OPTIONS`` carrying
+        ``Origin``/``Access-Control-Request-Method`` but NO ``Authorization``
+        header — browsers never send credentials on preflight) is short-circuited
+        with the ``Access-Control-Allow-*`` headers BEFORE
+        ``AuthenticationMiddleware`` can reject it with a 401. Ordering CORS
+        inside Auth (the former layout) made cross-origin authenticated clients
+        unusable: the preflight got 401'd and the browser blocked the real
+        request.
         """
         security = self.config.security
         middleware = []
+
+        # WR-05: Metrics outermost — counts rejected (401/429) requests too.
+        middleware.append(Middleware(MetricsMiddleware))
 
         if security.enable_cors:
             middleware.append(
@@ -230,8 +240,6 @@ class NetOpsMCPHTTPServer:
                 exempt_paths={"/health", "/metrics"},
             )
         )
-
-        middleware.append(Middleware(MetricsMiddleware))
 
         return self.mcp.http_app(path=self.path, middleware=middleware)
 

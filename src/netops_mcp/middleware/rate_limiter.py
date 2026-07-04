@@ -15,6 +15,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp
 
+from .metrics import metrics_collector
+
 logger = logging.getLogger("netops-mcp.rate_limiter")
 
 
@@ -199,6 +201,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         allowed, remaining, reset_time = await self.rate_limiter.is_allowed(client_id)
         
         if not allowed:
+            # WR-05: record the throttle event so rate_limit_hits_total reflects
+            # real abuse instead of being a permanently-zero exported counter.
+            metrics_collector.record_rate_limit_hit()
             logger.warning(f"Rate limit exceeded for {client_id} on {path}")
             return JSONResponse(
                 status_code=429,

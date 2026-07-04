@@ -17,6 +17,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
+from .metrics import metrics_collector
+
 logger = logging.getLogger("netops-mcp.auth")
 
 
@@ -149,6 +151,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         api_key = self._extract_api_key(request)
         
         if not api_key:
+            # WR-05: record the failed attempt so auth_attempts_total /
+            # auth_failures_total reflect real traffic instead of a hard zero.
+            metrics_collector.record_auth_attempt(success=False)
             logger.warning(f"No API key provided for {path}")
             return JSONResponse(
                 status_code=401,
@@ -160,10 +165,12 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     "WWW-Authenticate": 'Bearer realm="NetOpsMCP"'
                 }
             )
-        
+
         # Validate API key (digest computed once, reused for logging state)
         digest = self._hash_key(api_key)
         if not self._validate_digest(digest):
+            # WR-05: count the invalid-key failure.
+            metrics_collector.record_auth_attempt(success=False)
             logger.warning(f"Invalid API key attempt for {path}")
             return JSONResponse(
                 status_code=403,
@@ -174,6 +181,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             )
 
         # API key is valid, proceed with request
+        # WR-05: count the successful attempt (auth_attempts_total increments,
+        # auth_failures_total does not) so the ratio is meaningful.
+        metrics_collector.record_auth_attempt(success=True)
         logger.debug(f"Valid API key provided for {path}")
 
         # Add authentication info to request state

@@ -34,7 +34,10 @@ class MetricsCollector:
         
         # HTTP metrics
         self.http_requests_total: Dict[tuple, int] = defaultdict(int)
-        self.http_request_duration_seconds: Dict[tuple, list] = defaultdict(list)
+        # Bounded duration accumulation (PERF-01): running sum + count scalars
+        # instead of an unbounded per-sample list. Memory stays O(label cardinality).
+        self.http_request_duration_sum: Dict[tuple, float] = defaultdict(float)
+        self.http_request_duration_count: Dict[tuple, int] = defaultdict(int)
         self.http_requests_in_progress = 0
         
         # Authentication metrics
@@ -46,7 +49,9 @@ class MetricsCollector:
         
         # Tool execution metrics
         self.tool_executions_total: Dict[str, int] = defaultdict(int)
-        self.tool_execution_duration: Dict[str, list] = defaultdict(list)
+        # Bounded duration accumulation (PERF-01): running sum + count scalars.
+        self.tool_execution_duration_sum: Dict[str, float] = defaultdict(float)
+        self.tool_execution_duration_count: Dict[str, int] = defaultdict(int)
         self.tool_failures_total: Dict[str, int] = defaultdict(int)
     
     def record_http_request(self, method: str, path: str, status_code: int, duration: float):
@@ -62,7 +67,8 @@ class MetricsCollector:
         with self.lock:
             key = (method, path, status_code)
             self.http_requests_total[key] += 1
-            self.http_request_duration_seconds[key].append(duration)
+            self.http_request_duration_sum[key] += duration
+            self.http_request_duration_count[key] += 1
     
     def inc_requests_in_progress(self):
         """Increment in-progress requests counter."""
@@ -97,7 +103,8 @@ class MetricsCollector:
         """
         with self.lock:
             self.tool_executions_total[tool_name] += 1
-            self.tool_execution_duration[tool_name].append(duration)
+            self.tool_execution_duration_sum[tool_name] += duration
+            self.tool_execution_duration_count[tool_name] += 1
             if not success:
                 self.tool_failures_total[tool_name] += 1
     
@@ -122,10 +129,9 @@ class MetricsCollector:
             # HTTP request duration
             lines.append("# HELP http_request_duration_seconds HTTP request duration in seconds")
             lines.append("# TYPE http_request_duration_seconds histogram")
-            for (method, path, status), durations in self.http_request_duration_seconds.items():
-                if durations:
-                    count = len(durations)
-                    total = sum(durations)
+            for (method, path, status), count in self.http_request_duration_count.items():
+                if count:
+                    total = self.http_request_duration_sum[(method, path, status)]
                     lines.append(
                         f'http_request_duration_seconds_sum{{method="{method}",path="{path}",status="{status}"}} {total:.6f}'
                     )
@@ -160,10 +166,9 @@ class MetricsCollector:
             
             lines.append("# HELP tool_execution_duration_seconds Tool execution duration in seconds")
             lines.append("# TYPE tool_execution_duration_seconds histogram")
-            for tool_name, durations in self.tool_execution_duration.items():
-                if durations:
-                    count = len(durations)
-                    total = sum(durations)
+            for tool_name, count in self.tool_execution_duration_count.items():
+                if count:
+                    total = self.tool_execution_duration_sum[tool_name]
                     lines.append(f'tool_execution_duration_seconds_sum{{tool="{tool_name}"}} {total:.6f}')
                     lines.append(f'tool_execution_duration_seconds_count{{tool="{tool_name}"}} {count}')
             

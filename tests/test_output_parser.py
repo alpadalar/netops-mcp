@@ -75,6 +75,44 @@ class TestParsePingOutput:
         assert stats["max_rtt"] is None
         assert stats["mdev_rtt"] is None
 
+    def test_parse_ping_output_bsd_format(self):
+        """macOS/BSD ping output (WR-03): '<n> packets received' and 'round-trip'."""
+        bsd_output = """PING google.com (142.250.185.78): 56 data bytes
+64 bytes from 142.250.185.78: icmp_seq=0 ttl=115 time=12.345 ms
+64 bytes from 142.250.185.78: icmp_seq=1 ttl=115 time=13.456 ms
+
+--- google.com ping statistics ---
+4 packets transmitted, 4 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 12.345/13.456/14.567/0.789 ms"""
+
+        stats = OutputParser.parse_ping_output(bsd_output)
+
+        assert stats["packets_transmitted"] == 4
+        assert stats["packets_received"] == 4
+        assert stats["packet_loss_percent"] == 0.0
+        assert stats["min_rtt"] == 12.345
+        assert stats["avg_rtt"] == 13.456
+        assert stats["max_rtt"] == 14.567
+        assert stats["mdev_rtt"] == 0.789
+
+    def test_parse_ping_output_bsd_unreachable(self):
+        """macOS/BSD 100%-loss output (WR-03 + WR-02): loss parsed, rtt null."""
+        bsd_output = """PING 192.0.2.1 (192.0.2.1): 56 data bytes
+Request timeout for icmp_seq 0
+
+--- 192.0.2.1 ping statistics ---
+2 packets transmitted, 0 packets received, 100.0% packet loss"""
+
+        stats = OutputParser.parse_ping_output(bsd_output)
+
+        assert stats["packets_transmitted"] == 2
+        assert stats["packets_received"] == 0
+        assert stats["packet_loss_percent"] == 100.0
+        assert stats["min_rtt"] is None
+        assert stats["avg_rtt"] is None
+        assert stats["max_rtt"] is None
+        assert stats["mdev_rtt"] is None
+
     def test_parse_ping_output_no_stats_line(self):
         """Empty input keeps the default zero-valued stats dict."""
         stats = OutputParser.parse_ping_output("")

@@ -35,7 +35,9 @@ class OutputParser:
         lines = output.split('\n')
         for line in lines:
             if 'packets transmitted' in line:
-                match = re.search(r'(\d+) packets transmitted, (\d+) received', line)
+                # Linux iputils: "4 packets transmitted, 4 received"
+                # macOS/BSD:     "4 packets transmitted, 4 packets received" (WR-03)
+                match = re.search(r'(\d+) packets transmitted, (\d+)(?: packets)? received', line)
                 if match:
                     stats["packets_transmitted"] = int(match.group(1))
                     stats["packets_received"] = int(match.group(2))
@@ -55,7 +57,9 @@ class OutputParser:
                         stats["max_rtt"] = None
                         stats["mdev_rtt"] = None
             
-            elif 'rtt min/avg/max/mdev' in line:
+            # Linux: "rtt min/avg/max/mdev = ..."
+            # macOS/BSD: "round-trip min/avg/max/stddev = ..." (WR-03)
+            elif 'rtt min/avg/max/mdev' in line or 'round-trip min/avg/max' in line:
                 match = re.search(r'(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)', line)
                 if match:
                     stats["min_rtt"] = float(match.group(1))

@@ -2,6 +2,8 @@
 Comprehensive tests for connectivity tools functionality.
 """
 
+import json
+
 import pytest
 from unittest.mock import patch, MagicMock
 from netops_mcp.tools.network.connectivity_tools import ConnectivityTools
@@ -288,18 +290,24 @@ class TestConnectivityTools:
         assert "5" in call_args
 
     def test_mtr_monitor_with_timeout(self, mock_execute_command, sample_mtr_output):
-        """Test mtr monitor with custom timeout."""
+        """Test mtr monitor with custom timeout (BUG-04 regression).
+
+        mtr's `-w` is `--report-wide` (no argument); passing the timeout after
+        it makes mtr probe the timeout value as an extra target host. The
+        timeout must never appear in the command — the overall deadline is
+        enforced via _execute_command's second positional argument.
+        """
         mock_execute_command.return_value = sample_mtr_output
-        
+
         result = self.connectivity_tools.mtr_monitor("google.com", timeout=60)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
-        # Verify timeout was passed to command
         mock_execute_command.assert_called_once()
         call_args = mock_execute_command.call_args[0][0]
-        assert "-w" in call_args
-        assert "60" in call_args
+        assert "-w" not in call_args
+        assert "60" not in call_args
+        assert mock_execute_command.call_args[0][1] == 70
 
     def test_mtr_monitor_invalid_target(self, mock_execute_command):
         """Test mtr monitor with invalid target."""
@@ -308,7 +316,7 @@ class TestConnectivityTools:
             "stdout": "",
             "stderr": "mtr: invalid-target: Name or service not known",
             "return_code": 1,
-            "command": "mtr -c 10 -w 30 --report invalid-target"
+            "command": "mtr -c 10 --report invalid-target"
         }
         
         result = self.connectivity_tools.mtr_monitor("invalid-target")
@@ -598,3 +606,45 @@ HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev"""
         result = self.connectivity_tools.mtr_monitor("google.com", count=3)
 
         assert result[0].text == EXPECTED_MTR_SUCCESS_JSON
+
+    # --- BUG-01 regression tests (plan 01-04): unreachable / zero-tx ping ---
+
+    def test_ping_host_unreachable_returns_stats(self, mock_execute_command,
+                                                 sample_ping_unreachable_output):
+        """Unreachable host (exit 1, stats block on stdout) returns stats, not error."""
+        mock_execute_command.return_value = sample_ping_unreachable_output
+
+        result = self.connectivity_tools.ping_host("192.0.2.1")
+        data = json.loads(result[0].text)
+
+        assert data["success"] is False
+        assert "stats" in data
+        assert data["stats"]["packets_transmitted"] == 2
+        assert data["stats"]["packet_loss_percent"] == 100.0
+        assert "error" not in data
+
+    def test_ping_host_zero_tx_returns_stats_no_zerodivision(self, mock_execute_command,
+                                                             sample_ping_zero_tx_output):
+        """Zero packets transmitted: structured stats (loss 100, rtt null), no crash."""
+        mock_execute_command.return_value = sample_ping_zero_tx_output
+
+        result = self.connectivity_tools.ping_host("8.8.8.8")
+        data = json.loads(result[0].text)
+
+        assert "stats" in data
+        assert data["stats"]["packet_loss_percent"] == 100
+        assert data["stats"]["min_rtt"] is None
+        assert data["stats"]["avg_rtt"] is None
+        assert data["stats"]["max_rtt"] is None
+        assert data["stats"]["mdev_rtt"] is None
+
+    def test_ping_host_dns_failure_keeps_error_shape(self, mock_execute_command,
+                                                     sample_ping_dns_failure_output):
+        """DNS failure (empty stdout, no stats block) keeps the error response shape."""
+        mock_execute_command.return_value = sample_ping_dns_failure_output
+
+        result = self.connectivity_tools.ping_host("nonexistent-host.invalid")
+        data = json.loads(result[0].text)
+
+        assert set(data.keys()) == {"host", "success", "error", "raw_output"}
+        assert data["success"] is False

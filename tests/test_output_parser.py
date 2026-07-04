@@ -2,9 +2,9 @@
 Characterization tests for formatting/OutputParser.
 
 These tests lock the CURRENT parser behavior (plan 01-02) as the delegation
-baseline for plan 01-04. They intentionally cover success and partial-loss
-paths only; the zero-transmitted stats-line case is deliberately excluded
-because its behavior changes by design in plan 01-04.
+baseline for plan 01-04. Success and partial-loss paths are characterization
+tests; the zero-transmitted stats-line case asserts the NEW locked behavior
+introduced by plan 01-04 (BUG-01: loss 100, rtt fields None).
 """
 
 import pytest
@@ -50,6 +50,18 @@ class TestParsePingOutput:
         assert stats["avg_rtt"] == 1.34
         assert stats["max_rtt"] == 1.45
         assert stats["mdev_rtt"] == 0.11
+
+    def test_parse_ping_output_zero_transmitted(self, sample_ping_zero_tx_output):
+        """Zero-tx stats block (BUG-01): loss 100, all rtt fields None."""
+        stats = OutputParser.parse_ping_output(sample_ping_zero_tx_output["stdout"])
+
+        assert stats["packets_transmitted"] == 0
+        assert stats["packets_received"] == 0
+        assert stats["packet_loss_percent"] == 100
+        assert stats["min_rtt"] is None
+        assert stats["avg_rtt"] is None
+        assert stats["max_rtt"] is None
+        assert stats["mdev_rtt"] is None
 
     def test_parse_ping_output_no_stats_line(self):
         """Empty input keeps the default zero-valued stats dict."""

@@ -1,0 +1,617 @@
+{
+  "api_test": {
+    "description": "Test API endpoint with validation",
+    "inputSchema": {
+      "properties": {
+        "expected_status": {
+          "default": 200,
+          "title": "Expected Status",
+          "type": "integer"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headers"
+        },
+        "method": {
+          "default": "GET",
+          "title": "Method",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 30,
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  },
+  "arp_table": {
+    "description": "Show ARP table",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "arping_host": {
+    "description": "ARP ping a host",
+    "inputSchema": {
+      "properties": {
+        "count": {
+          "default": 4,
+          "title": "Count",
+          "type": "integer"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    }
+  },
+  "check_required_tools": {
+    "description": "Check required system tools",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "cpu_usage": {
+    "description": "Get CPU usage information",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "curl_request": {
+    "description": "Execute HTTP request using curl",
+    "inputSchema": {
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headers"
+        },
+        "method": {
+          "default": "GET",
+          "title": "Method",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 30,
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  },
+  "dig_query": {
+    "description": "Perform DNS lookup using dig",
+    "inputSchema": {
+      "properties": {
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "record_type": {
+          "default": "A",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server"
+        }
+      },
+      "required": [
+        "domain"
+      ],
+      "type": "object"
+    }
+  },
+  "disk_usage": {
+    "description": "Get disk usage information",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "health": {
+    "description": "Health check endpoint",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "host_lookup": {
+    "description": "Perform DNS lookup using host",
+    "inputSchema": {
+      "properties": {
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "record_type": {
+          "default": "A",
+          "title": "Record Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "domain"
+      ],
+      "type": "object"
+    }
+  },
+  "httpie_request": {
+    "description": "Execute HTTP request using httpie",
+    "inputSchema": {
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data"
+        },
+        "headers": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Headers"
+        },
+        "method": {
+          "default": "GET",
+          "title": "Method",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 30,
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "url": {
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  },
+  "memory_usage": {
+    "description": "Get memory usage information",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "mtr_monitor": {
+    "description": "Monitor network path using mtr",
+    "inputSchema": {
+      "properties": {
+        "count": {
+          "default": 10,
+          "title": "Count",
+          "type": "integer"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 30,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  "netcat_test": {
+    "description": "Test port connectivity using netcat",
+    "inputSchema": {
+      "properties": {
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "port": {
+          "title": "Port",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 10,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host",
+        "port"
+      ],
+      "type": "object"
+    }
+  },
+  "netstat_connections": {
+    "description": "Show network connections using netstat",
+    "inputSchema": {
+      "properties": {
+        "protocol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protocol"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "nmap_scan": {
+    "description": "Scan network using nmap",
+    "inputSchema": {
+      "properties": {
+        "ports": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ports"
+        },
+        "scan_type": {
+          "default": "basic",
+          "title": "Scan Type",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 300,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  "nslookup_query": {
+    "description": "Perform DNS lookup using nslookup",
+    "inputSchema": {
+      "properties": {
+        "domain": {
+          "title": "Domain",
+          "type": "string"
+        },
+        "record_type": {
+          "default": "A",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "server": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server"
+        }
+      },
+      "required": [
+        "domain"
+      ],
+      "type": "object"
+    }
+  },
+  "ping_host": {
+    "description": "Ping a host to test connectivity",
+    "inputSchema": {
+      "properties": {
+        "count": {
+          "default": 4,
+          "title": "Count",
+          "type": "integer"
+        },
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 10,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    }
+  },
+  "port_scan": {
+    "description": "Scan ports on a target",
+    "inputSchema": {
+      "properties": {
+        "ports": {
+          "title": "Ports",
+          "type": "string"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 60,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target",
+        "ports"
+      ],
+      "type": "object"
+    }
+  },
+  "process_list": {
+    "description": "List running processes",
+    "inputSchema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "service_discovery": {
+    "description": "Discover network services",
+    "inputSchema": {
+      "properties": {
+        "ports": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ports"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  "service_enumeration": {
+    "description": "Enumerate services on a target",
+    "inputSchema": {
+      "properties": {
+        "ports": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ports"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  },
+  "ss_connections": {
+    "description": "Show network connections using ss",
+    "inputSchema": {
+      "properties": {
+        "protocol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protocol"
+        },
+        "state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "system_status": {
+    "description": "Get system status",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "telnet_connect": {
+    "description": "Test port connectivity using telnet",
+    "inputSchema": {
+      "properties": {
+        "host": {
+          "title": "Host",
+          "type": "string"
+        },
+        "port": {
+          "title": "Port",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 10,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host",
+        "port"
+      ],
+      "type": "object"
+    }
+  },
+  "traceroute_path": {
+    "description": "Perform traceroute to a target",
+    "inputSchema": {
+      "properties": {
+        "max_hops": {
+          "default": 30,
+          "title": "Max Hops",
+          "type": "integer"
+        },
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 30,
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "type": "object"
+    }
+  }
+}

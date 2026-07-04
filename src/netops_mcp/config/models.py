@@ -80,6 +80,45 @@ class NetworkConfig(BaseModel):
     max_scan_timeout: int = 300
     allowed_ports: str = "1-65535"
 
+    @field_validator("allowed_ports")
+    @classmethod
+    def _validate_allowed_ports(cls, v: str) -> str:
+        """Reject malformed allowed_ports values at config load time.
+
+        Accepts a comma-separated list of ports and ranges, e.g. "80",
+        "80-443", "1-1024,8080". Every port must fall in 1-65535 and every
+        range must have start <= end. This is a format/type guard only —
+        enforcing the allow-list against live scans (clamping requested
+        ports to this range) lands in Phase 4 (SEC-05); until then the value
+        is validated but not consumed.
+        """
+        spec = v.strip()
+        if not spec:
+            raise ValueError("allowed_ports must be a non-empty port range string")
+        if not re.fullmatch(r"[0-9,\-]+", spec):
+            raise ValueError(
+                "allowed_ports may contain only digits, commas, and hyphens "
+                '(e.g. "1-1024,8080")'
+            )
+        for part in spec.split(","):
+            part = part.strip()
+            if not part:
+                raise ValueError("allowed_ports contains an empty segment")
+            if "-" in part:
+                bounds = part.split("-")
+                if len(bounds) != 2 or not bounds[0] or not bounds[1]:
+                    raise ValueError(f"Invalid port range segment: {part!r}")
+                start, end = int(bounds[0]), int(bounds[1])
+                if start > end:
+                    raise ValueError(f"Invalid port range: {part!r} (start > end)")
+                candidates = (start, end)
+            else:
+                candidates = (int(part),)
+            for port in candidates:
+                if not 1 <= port <= 65535:
+                    raise ValueError(f"Port out of range (1-65535): {port}")
+        return v
+
 
 class ServerConfig(BaseModel):
     """Model for HTTP server configuration (host/port/path defaults)."""

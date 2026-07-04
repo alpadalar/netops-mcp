@@ -5,11 +5,11 @@ Provides in-memory rate limiting using a sliding window algorithm.
 Supports per-API-key rate limiting and configurable limits per endpoint.
 """
 
+import asyncio
 import time
 import logging
 from typing import Dict, Tuple, Optional, Callable, Awaitable
 from collections import defaultdict
-from threading import Lock
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -25,19 +25,27 @@ class RateLimiter:
     Tracks requests per client (API key or IP) and enforces rate limits.
     """
     
-    def __init__(self, requests_per_window: int = 100, window_seconds: int = 60):
+    def __init__(
+        self,
+        requests_per_window: int = 100,
+        window_seconds: int = 60,
+        time_func: Callable[[], float] = time.time,
+    ):
         """
         Initialize rate limiter.
-        
+
         Args:
             requests_per_window: Maximum requests allowed in the time window
             window_seconds: Time window in seconds
+            time_func: Clock callable returning the current time in seconds.
+                Injectable so sliding-window expiry is testable without sleeping.
         """
         self.requests_per_window = requests_per_window
         self.window_seconds = window_seconds
         self.requests: Dict[str, list[float]] = defaultdict(list)
-        self.lock = Lock()
-        
+        self._now = time_func
+        self._lock = asyncio.Lock()
+
         logger.info(f"Rate limiter initialized: {requests_per_window} requests per {window_seconds}s")
     
     def _cleanup_old_requests(self, client_id: str, current_time: float) -> None:
@@ -54,22 +62,22 @@ class RateLimiter:
             if req_time > cutoff_time
         ]
     
-    def is_allowed(self, client_id: str) -> Tuple[bool, int, int]:
+    async def is_allowed(self, client_id: str) -> Tuple[bool, int, int]:
         """
         Check if a request is allowed for the client.
-        
+
         Args:
             client_id: Client identifier (API key hash or IP)
-            
+
         Returns:
             Tuple of (allowed, remaining, reset_time)
             - allowed: Whether the request is allowed
             - remaining: Number of requests remaining in window
             - reset_time: Seconds until rate limit resets
         """
-        with self.lock:
-            current_time = time.time()
-            
+        async with self._lock:
+            current_time = self._now()
+
             # Clean up old requests
             self._cleanup_old_requests(client_id, current_time)
             
@@ -88,18 +96,18 @@ class RateLimiter:
             
             return True, remaining, self.window_seconds
     
-    def get_stats(self, client_id: str) -> Dict[str, int]:
+    async def get_stats(self, client_id: str) -> Dict[str, int]:
         """
         Get rate limit statistics for a client.
-        
+
         Args:
             client_id: Client identifier
-            
+
         Returns:
             Dictionary with rate limit stats
         """
-        with self.lock:
-            current_time = time.time()
+        async with self._lock:
+            current_time = self._now()
             self._cleanup_old_requests(client_id, current_time)
             
             request_count = len(self.requests[client_id])
@@ -188,7 +196,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_id = self._get_client_identifier(request)
         
         # Check rate limit
-        allowed, remaining, reset_time = self.rate_limiter.is_allowed(client_id)
+        allowed, remaining, reset_time = await self.rate_limiter.is_allowed(client_id)
         
         if not allowed:
             logger.warning(f"Rate limit exceeded for {client_id} on {path}")

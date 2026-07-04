@@ -2,6 +2,7 @@
 Tests for the HTTP server module.
 """
 import json
+import re
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from fastmcp import FastMCP
@@ -182,3 +183,115 @@ class TestNetOpsMCPHTTPServer:
                     port=8000,
                     path='/test'
                 )
+
+
+class TestAuthGate:
+    """Fail-fast auth gate in run() (SEC-01, D-01).
+
+    Default config ships require_auth=True with no api_keys; HTTP mode must
+    refuse to start BEFORE uvicorn binds, with operator guidance. Construction
+    stays permissive — the gate lives in run(), never in __init__.
+    """
+
+    @patch('netops_mcp.server_http.signal.signal')
+    def test_gate_blocks_run_without_keys(self, mock_signal):
+        """Default config (require_auth=True, empty api_keys) must refuse to run."""
+        server = NetOpsMCPHTTPServer()
+
+        with patch.object(server.mcp, 'run') as mock_run:
+            with pytest.raises(RuntimeError):
+                server.run()
+
+        mock_run.assert_not_called()
+
+    @patch('netops_mcp.server_http.signal.signal')
+    def test_gate_message_operator_guidance(self, mock_signal):
+        """Gate error carries a CSPRNG example key, its sha256: digest and opt-out."""
+        server = NetOpsMCPHTTPServer()
+
+        with patch.object(server.mcp, 'run'):
+            with pytest.raises(RuntimeError) as excinfo:
+                server.run()
+
+        message = str(excinfo.value)
+        # A fresh secrets.token_urlsafe(32) example is 43 url-safe base64 chars
+        assert re.search(r'[A-Za-z0-9_-]{43}', message)
+        assert "sha256:" in message
+        assert '"require_auth": false' in message
+
+    @patch('netops_mcp.server_http.signal.signal')
+    def test_gate_open_when_auth_disabled(self, mock_signal):
+        """Explicit require_auth=False opt-out lets run() reach mcp.run."""
+        config = Config()
+        config.security.require_auth = False
+
+        with patch('netops_mcp.server_http.load_config', return_value=config):
+            server = NetOpsMCPHTTPServer()
+
+        with patch.object(server.mcp, 'run') as mock_run:
+            try:
+                server.run()
+            except SystemExit:
+                pass
+
+        mock_run.assert_called_once()
+
+    @patch('netops_mcp.server_http.signal.signal')
+    def test_gate_open_with_hashed_key(self, mock_signal):
+        """A configured sha256:<64-hex> key satisfies the gate."""
+        config = Config()
+        config.security.api_keys = ["sha256:" + "a" * 64]
+
+        with patch('netops_mcp.server_http.load_config', return_value=config):
+            server = NetOpsMCPHTTPServer()
+
+        with patch.object(server.mcp, 'run') as mock_run:
+            try:
+                server.run()
+            except SystemExit:
+                pass
+
+        mock_run.assert_called_once()
+
+    def test_construction_never_raises(self):
+        """Bare construction under default (auth-on, keyless) config must not raise."""
+        server = NetOpsMCPHTTPServer()
+
+        assert server.config.security.require_auth is True
+        assert server.config.security.api_keys == []
+
+
+class TestPrecedence:
+    """CLI > config.server > builtin precedence (SEC-08, D-03).
+
+    Builtin defaults (no config, no args → 0.0.0.0/8815//netops-mcp) are
+    covered by TestNetOpsMCPHTTPServer.test_default_parameters — not
+    duplicated here.
+    """
+
+    def _config_with_server(self):
+        config = Config()
+        config.server.host = "10.9.8.7"
+        config.server.port = 9999
+        config.server.path = "/custom"
+        return config
+
+    def test_config_server_used_when_ctor_omits(self):
+        """config.server values win when ctor/CLI omit host/port/path."""
+        with patch('netops_mcp.server_http.load_config',
+                   return_value=self._config_with_server()):
+            server = NetOpsMCPHTTPServer()
+
+        assert server.host == "10.9.8.7"
+        assert server.port == 9999
+        assert server.path == "/custom"
+
+    def test_ctor_args_win_over_config_server(self):
+        """Explicit ctor args beat config.server; omitted ones fall back to it."""
+        with patch('netops_mcp.server_http.load_config',
+                   return_value=self._config_with_server()):
+            server = NetOpsMCPHTTPServer(host="1.2.3.4")
+
+        assert server.host == "1.2.3.4"
+        assert server.port == 9999
+        assert server.path == "/custom"

@@ -283,6 +283,35 @@ class TestAuthGate:
         assert server.config.security.require_auth is True
         assert server.config.security.api_keys == []
 
+    def test_build_http_app_fails_safe_without_keys(self):
+        """WR-01: build_http_app itself refuses to serve fail-open.
+
+        The enforcement invariant travels WITH the served app, not only run()'s
+        startup gate. A caller that bypasses run() (e.g. the E2E harness) and
+        builds the app under the shipped default (require_auth=True, no keys)
+        gets a loud RuntimeError instead of a silently unauthenticated app.
+        """
+        server = NetOpsMCPHTTPServer()
+
+        assert server.config.security.require_auth is True
+        assert server.config.security.api_keys == []
+        with pytest.raises(RuntimeError, match="require_auth"):
+            server.build_http_app()
+
+    def test_build_http_app_ok_with_hashed_key(self):
+        """WR-01: with a configured key, build_http_app returns a served app."""
+        config = Config()
+        config.security.api_keys = ["sha256:" + "a" * 64]
+
+        with patch('netops_mcp.server_http.load_config', return_value=config):
+            server = NetOpsMCPHTTPServer()
+
+        # Must not raise; the auth middleware is attached to the served app.
+        app = server.build_http_app()
+        middleware_classes = [m.cls for m in app.user_middleware]
+        from netops_mcp.middleware.auth import AuthenticationMiddleware
+        assert AuthenticationMiddleware in middleware_classes
+
 
 class TestPrecedence:
     """CLI > config.server > builtin precedence (SEC-08, D-03).

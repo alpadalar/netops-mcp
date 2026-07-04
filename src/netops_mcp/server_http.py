@@ -174,7 +174,19 @@ class NetOpsMCPHTTPServer:
                 Middleware(TrustedHostMiddleware, allowed_hosts=security.allowed_hosts)
             )
 
-        if security.require_auth and security.api_keys:
+        if security.require_auth:
+            # WR-01: fail-safe seam. The auth-enforcement invariant lives HERE,
+            # on the served app itself — not only in run()'s startup gate. Any
+            # caller that builds and serves this app (e.g. the E2E harness, which
+            # bypasses run()) is guaranteed to either serve WITH auth attached or
+            # fail loudly at build time, never fail-open with require_auth=True
+            # and no keys. Keeps the Phase 2 fail-fast style.
+            if not security.api_keys:
+                raise RuntimeError(
+                    "require_auth is enabled but no api_keys are configured; "
+                    "refusing to build an unauthenticated app. Configure "
+                    "security.api_keys or explicitly set require_auth=false."
+                )
             middleware.append(
                 Middleware(
                     AuthenticationMiddleware,

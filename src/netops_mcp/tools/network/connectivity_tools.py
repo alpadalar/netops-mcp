@@ -2,6 +2,7 @@
 Network connectivity testing tools for NetOps MCP.
 """
 
+import sys
 from typing import List
 
 from mcp.types import TextContent as Content
@@ -28,7 +29,13 @@ class ConnectivityTools(NetOpsTool):
             if not self._validate_host(host):
                 raise ValueError("Invalid host provided")
 
-            command = ['ping', '-c', str(count), '-W', str(timeout), host]
+            # WR-03: ping's -W is per-reply wait in SECONDS on Linux iputils
+            # but MILLISECONDS on macOS/BSD ("time in milliseconds to wait
+            # for a reply for each packet"). Passing seconds on darwin makes
+            # every reply slower than ~10ms count as lost. Convert on darwin;
+            # Linux argv stays byte-identical.
+            wait = str(timeout * 1000) if sys.platform == 'darwin' else str(timeout)
+            command = ['ping', '-c', str(count), '-W', wait, host]
             result = self._execute_command(command, timeout + 5)
             
             if 'packets transmitted' in result["stdout"]:

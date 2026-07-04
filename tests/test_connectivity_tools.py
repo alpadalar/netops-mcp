@@ -228,6 +228,27 @@ class TestConnectivityTools:
         assert "-W" in call_args
         assert "30" in call_args
 
+    def test_ping_host_darwin_wait_in_milliseconds(self, mock_execute_command,
+                                                   sample_ping_output):
+        """WR-03 regression: macOS/BSD ping -W takes MILLISECONDS, not seconds.
+
+        On darwin the tool's timeout (seconds) must be converted to ms for
+        -W; otherwise replies slower than ~10ms are counted as lost. The
+        Linux argv (seconds) is covered by test_ping_host_with_timeout and
+        must stay byte-identical.
+        """
+        mock_execute_command.return_value = sample_ping_output
+
+        with patch('netops_mcp.tools.network.connectivity_tools.sys.platform', 'darwin'):
+            result = self.connectivity_tools.ping_host("google.com", timeout=10)
+
+        assert len(result) == 1
+        mock_execute_command.assert_called_once()
+        call_args = mock_execute_command.call_args[0][0]
+        assert call_args[call_args.index("-W") + 1] == "10000"
+        # Subprocess deadline stays in seconds regardless of platform
+        assert mock_execute_command.call_args[0][1] == 15
+
     def test_ping_host_invalid_host(self, mock_execute_command):
         """Test ping with invalid host."""
         mock_execute_command.return_value = {

@@ -2,9 +2,11 @@
 Network connectivity testing tools for NetOps MCP.
 """
 
-import re
-from typing import Dict, List, Optional
+from typing import List
+
 from mcp.types import TextContent as Content
+
+from ...formatting.output_parser import OutputParser
 from ..base import NetOpsTool
 
 
@@ -29,12 +31,14 @@ class ConnectivityTools(NetOpsTool):
             command = ['ping', '-c', str(count), '-W', str(timeout), host]
             result = self._execute_command(command, timeout + 5)
             
-            if result["success"]:
-                # Parse ping output
-                ping_stats = self._parse_ping_output(result["stdout"])
+            if 'packets transmitted' in result["stdout"]:
+                # Parse ping output whenever a stats block is present,
+                # regardless of exit code (unreachable hosts exit 1 but
+                # still print full statistics — BUG-01 locked decision).
+                ping_stats = OutputParser.parse_ping_output(result["stdout"])
                 response_data = {
                     "host": host,
-                    "success": True,
+                    "success": result["success"],
                     "stats": ping_stats,
                     "raw_output": result["stdout"]
                 }
@@ -71,7 +75,7 @@ class ConnectivityTools(NetOpsTool):
             
             if result["success"]:
                 # Parse traceroute output
-                hops = self._parse_traceroute_output(result["stdout"])
+                hops = OutputParser.parse_traceroute_output(result["stdout"])
                 response_data = {
                     "target": target,
                     "success": True,
@@ -106,12 +110,16 @@ class ConnectivityTools(NetOpsTool):
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
 
-            command = ['mtr', '-c', str(count), '-w', str(timeout), '--report', target]
+            # BUG-04: mtr's `-w` is `--report-wide` (takes no argument) — the
+            # timeout must never be placed in argv (mtr would probe it as an
+            # extra target host). The overall deadline is enforced by the
+            # subprocess timeout passed to _execute_command below.
+            command = ['mtr', '-c', str(count), '--report', target]
             result = self._execute_command(command, timeout + 10)
-            
+
             if result["success"]:
                 # Parse mtr output
-                mtr_stats = self._parse_mtr_output(result["stdout"])
+                mtr_stats = OutputParser.parse_mtr_output(result["stdout"])
                 response_data = {
                     "target": target,
                     "success": True,
@@ -195,123 +203,6 @@ class ConnectivityTools(NetOpsTool):
             }
             
             return self._format_response(response_data, "netcat_test")
-            
+
         except Exception as e:
             return self._handle_error("netcat test", e)
-
-    def _parse_ping_output(self, output: str) -> Dict[str, any]:
-        """Parse ping command output.
-
-        Args:
-            output: Raw ping output
-
-        Returns:
-            Dictionary with parsed ping statistics
-        """
-        stats = {
-            "packets_transmitted": 0,
-            "packets_received": 0,
-            "packet_loss_percent": 0,
-            "min_rtt": 0,
-            "avg_rtt": 0,
-            "max_rtt": 0,
-            "mdev_rtt": 0
-        }
-        
-        # Parse ping statistics
-        lines = output.split('\n')
-        for line in lines:
-            if 'packets transmitted' in line:
-                match = re.search(r'(\d+) packets transmitted, (\d+) received', line)
-                if match:
-                    stats["packets_transmitted"] = int(match.group(1))
-                    stats["packets_received"] = int(match.group(2))
-                    stats["packet_loss_percent"] = 100 - (stats["packets_received"] / stats["packets_transmitted"] * 100)
-            
-            elif 'rtt min/avg/max/mdev' in line:
-                match = re.search(r'(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)', line)
-                if match:
-                    stats["min_rtt"] = float(match.group(1))
-                    stats["avg_rtt"] = float(match.group(2))
-                    stats["max_rtt"] = float(match.group(3))
-                    stats["mdev_rtt"] = float(match.group(4))
-        
-        return stats
-
-    def _parse_traceroute_output(self, output: str) -> List[Dict[str, any]]:
-        """Parse traceroute command output.
-
-        Args:
-            output: Raw traceroute output
-
-        Returns:
-            List of hop information
-        """
-        hops = []
-        lines = output.split('\n')
-        
-        for line in lines:
-            if line.strip() and not line.startswith('traceroute'):
-                # Parse hop line
-                parts = line.split()
-                if len(parts) >= 4:
-                    hop_info = {
-                        "hop_number": int(parts[0]),
-                        "host": parts[1],
-                        "ip": parts[1],
-                        "times": []
-                    }
-                    
-                    # Extract response times
-                    for part in parts[2:]:
-                        if part != '*':
-                            try:
-                                hop_info["times"].append(float(part))
-                            except ValueError:
-                                pass
-                    
-                    hops.append(hop_info)
-        
-        return hops
-
-    def _parse_mtr_output(self, output: str) -> Dict[str, any]:
-        """Parse mtr command output.
-
-        Args:
-            output: Raw mtr output
-
-        Returns:
-            Dictionary with mtr statistics
-        """
-        stats = {
-            "target": "",
-            "hops": []
-        }
-        
-        lines = output.split('\n')
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith('Start') or line.startswith('HOST:'):
-                continue
-                
-            parts = line.split()
-            if len(parts) >= 8:
-                try:
-                    # Skip header lines and non-numeric entries
-                    hop_num = int(parts[0])
-                    hop_info = {
-                        "hop": hop_num,
-                        "host": parts[1],
-                        "loss_percent": float(parts[2].rstrip('%')),
-                        "snt": int(parts[3]),
-                        "last": float(parts[4]),
-                        "avg": float(parts[5]),
-                        "best": float(parts[6]),
-                        "worst": float(parts[7])
-                    }
-                    stats["hops"].append(hop_info)
-                except (ValueError, IndexError):
-                    # Skip malformed lines
-                    continue
-        
-        return stats

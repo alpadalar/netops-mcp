@@ -6,7 +6,7 @@ and converting them into structured data.
 """
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class OutputParser:
@@ -40,7 +40,17 @@ class OutputParser:
                     stats["packets_transmitted"] = int(match.group(1))
                     stats["packets_received"] = int(match.group(2))
                     if stats["packets_transmitted"] > 0:
-                        stats["packet_loss_percent"] = 100 - (stats["packets_received"] / stats["packets_transmitted"] * 100)
+                        stats["packet_loss_percent"] = 100 - (
+                            stats["packets_received"] / stats["packets_transmitted"] * 100
+                        )
+                    else:
+                        # Zero packets transmitted (BUG-01): total loss,
+                        # rtt values are meaningless — report them as null.
+                        stats["packet_loss_percent"] = 100
+                        stats["min_rtt"] = None
+                        stats["avg_rtt"] = None
+                        stats["max_rtt"] = None
+                        stats["mdev_rtt"] = None
             
             elif 'rtt min/avg/max/mdev' in line:
                 match = re.search(r'(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)/(\d+\.?\d*)', line)

@@ -447,52 +447,10 @@ class TestConnectivityTools:
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
 
-    def test_parse_mtr_output_valid(self):
-        """Test mtr output parsing with valid output."""
-        mtr_output = """Start: 2025-08-19T15:06:45+0000
-HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev
-  1.|-- _gateway                0.0%     3    1.2   1.1   0.9   1.3   0.2
-  2.|-- 10.0.0.1                0.0%     3    5.4   5.3   5.1   5.6   0.3
-  3.|-- google.com              0.0%     3   15.3  15.4  15.1  15.7   0.3"""
-        
-        parsed = self.connectivity_tools._parse_mtr_output(mtr_output)
-        
-        # This test is simplified since mtr parsing is not implemented
-        assert "target" in parsed
-        # This test is simplified since mtr parsing is not implemented
-        pass
-
-    def test_parse_mtr_output_with_malformed_lines(self):
-        """Test mtr output parsing with malformed lines."""
-        mtr_output = """Start: 2025-08-19T15:06:45+0000
-HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev
-  1.|-- _gateway                0.0%     3    1.2   1.1   0.9   1.3   0.2
-  malformed line here
-  2.|-- 10.0.0.1                0.0%     3    5.4   5.3   5.1   5.6   0.3
-  another malformed line
-  3.|-- google.com              0.0%     3   15.3  15.4  15.1  15.7   0.3"""
-        
-        parsed = self.connectivity_tools._parse_mtr_output(mtr_output)
-        
-        # This test is simplified since mtr parsing is not implemented
-        assert "target" in parsed
-
-    def test_parse_mtr_output_empty(self):
-        """Test mtr output parsing with empty output."""
-        parsed = self.connectivity_tools._parse_mtr_output("")
-        
-        assert parsed["target"] == ""
-        assert len(parsed["hops"]) == 0
-
-    def test_parse_mtr_output_only_headers(self):
-        """Test mtr output parsing with only header lines."""
-        mtr_output = """Start: 2025-08-19T15:06:45+0000
-HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev"""
-        
-        parsed = self.connectivity_tools._parse_mtr_output(mtr_output)
-        
-        assert parsed["target"] == ""
-        assert len(parsed["hops"]) == 0
+    # NOTE: the former mtr-parser unit tests (4 cases) were migrated to
+    # tests/test_output_parser.py::TestParseMtrOutput in plan 01-02; the
+    # inline parser methods they exercised were deleted in plan 01-04
+    # (REF-03: OutputParser is the single parsing source).
 
     def test_validate_host(self, valid_hosts, invalid_hosts):
         """Test host validation."""

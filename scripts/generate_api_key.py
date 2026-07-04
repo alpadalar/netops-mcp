@@ -3,7 +3,8 @@
 API Key Generator for NetOps MCP.
 
 This script generates secure API keys for authentication.
-Keys can be generated in plain text or hashed format.
+The plain key is printed ONCE to stdout; config files receive only
+'sha256:<hex>' digests (the format required by SecurityConfig).
 """
 
 import sys
@@ -17,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from netops_mcp.middleware.auth import generate_api_key, hash_api_key
 
 
-def main():
+def main() -> None:
     """Generate API keys."""
     parser = argparse.ArgumentParser(
         description="Generate API keys for NetOps MCP authentication"
@@ -52,15 +53,14 @@ def main():
     
     args = parser.parse_args()
     
-    # Generate keys
+    # Generate keys (digest always computed — it is what goes into config)
     keys = []
     for _ in range(args.count):
         key = generate_api_key(args.length)
         key_data = {
             "key": key,
+            "hash": f"sha256:{hash_api_key(key)}",
         }
-        if args.hash:
-            key_data["hash"] = hash_api_key(key)
         keys.append(key_data)
     
     # Output keys
@@ -78,10 +78,11 @@ def main():
             if args.hash:
                 print(f"  Hash:    {key_data['hash']}")
             print()
-        
+
         print("=" * 80)
-        print("IMPORTANT: Store these keys securely!")
-        print("Add them to your config.json under security.api_keys")
+        print("IMPORTANT: Save the plain API key(s) NOW - they are not stored anywhere.")
+        print("This is your only chance to copy them; only 'sha256:<hex>' digests")
+        print("belong in config.json under security.api_keys.")
         print("=" * 80)
     
     # Optionally add to config file
@@ -103,19 +104,20 @@ def main():
             if 'api_keys' not in config['security']:
                 config['security']['api_keys'] = []
             
-            # Add new keys
+            # Add new keys as sha256:<hex> digests — plain keys never touch disk
             for key_data in keys:
-                config['security']['api_keys'].append(key_data['key'])
-            
+                config['security']['api_keys'].append(key_data['hash'])
+
             # Enable authentication
             config['security']['require_auth'] = True
-            
+
             # Write back to file
             with open(config_path, 'w') as f:
                 json.dump(config, f, indent=2)
-            
-            print(f"\n✓ Added {len(keys)} key(s) to {config_path}")
+
+            print(f"\n✓ Added {len(keys)} hashed key(s) to {config_path}")
             print("✓ Authentication enabled (require_auth: true)")
+            print("✓ Only sha256 digests were written; the plain key(s) above are NOT stored")
             
         except Exception as e:
             print(f"\nError updating config file: {e}", file=sys.stderr)

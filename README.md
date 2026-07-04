@@ -108,6 +108,10 @@ docker run -p 8815:8815 netopsmcp
 
 ### 1. Start the Server
 
+> **Note:** HTTP mode requires an API key by default. On a fresh checkout the
+> server refuses to start and prints setup instructions — see
+> [Authentication](#-authentication-breaking-change) below.
+
 ```bash
 # Using Python directly
 python -m netops_mcp.server_http --host 0.0.0.0 --port 8815
@@ -146,6 +150,134 @@ result = nslookup_query("google.com", record_type="A")
 # Network scan
 result = nmap_scan("192.168.1.1", ports="1-1000", scan_type="basic")
 ```
+
+## 🔐 Authentication (BREAKING CHANGE)
+
+> **BREAKING CHANGE:** HTTP mode now requires an API key by default
+> (`security.require_auth` defaults to `true`). Existing HTTP clients must
+> configure an API key before the server will start. **stdio mode is
+> unaffected.** To opt out explicitly, set `"require_auth": false` in the
+> config file (NOT recommended).
+
+### First Run
+
+Starting the HTTP server with no API keys configured fails fast — the server
+refuses to start *before* binding the port and exits with copy-paste
+instructions:
+
+```text
+Error: HTTP mode requires an API key (require_auth is enabled by default).
+  1. Example key (generated now, save it): <fresh-random-key>
+  2. Add its hash to config security.api_keys: "sha256:<hex-digest-of-that-key>"
+  3. Or explicitly opt out: "require_auth": false  (NOT recommended)
+```
+
+The example key is freshly generated on every failed start and is **never
+activated automatically** — save it (or generate your own, below), add its
+hash to the config, and restart.
+
+### Generating an API Key
+
+Use the bundled generator script:
+
+```bash
+# Generate one key; the plain key is printed ONCE and never stored
+python scripts/generate_api_key.py
+
+# Generate a key, show its sha256:<hex> digest, and write the digest
+# into config/config.json (security.api_keys + require_auth: true)
+python scripts/generate_api_key.py --hash --config config/config.json
+```
+
+Available flags: `-n/--count` (number of keys, default 1), `-l/--length`
+(key length, default 32), `--hash` (also print the paste-ready
+`sha256:<hex>` digest), `--json` (JSON output), `--config PATH` (append
+digests to that config file and enable `require_auth`).
+
+To hash an existing key yourself, use this one-liner:
+
+```bash
+python -c "import hashlib;print('sha256:'+hashlib.sha256(b'YOUR-KEY').hexdigest())"
+```
+
+### Config Format
+
+Only `sha256:<64-hex>` digests are accepted in `security.api_keys` — plain
+keys are rejected at config load time:
+
+```json
+{
+  "security": {
+    "require_auth": true,
+    "api_keys": [
+      "sha256:0f70dbbe4175927d0c7ff3bdc45622f13e6a5d306248731395a8995974effe25"
+    ]
+  }
+}
+```
+
+(The digest above is an example — it is the hash of the literal string
+`YOUR-KEY`. Use the digest of your own key.)
+
+### Making Authenticated Requests
+
+Clients send the **plain** key (not the digest); the server hashes it and
+compares digests in constant time. Three header forms are accepted:
+
+```bash
+curl -H "Authorization: Bearer YOUR-KEY" http://localhost:8815/netops-mcp
+curl -H "X-API-Key: YOUR-KEY" http://localhost:8815/netops-mcp
+curl -H "API-Key: YOUR-KEY" http://localhost:8815/netops-mcp
+```
+
+`/health` and `/metrics` are exempt from authentication.
+
+### Opting Out (NOT recommended)
+
+```json
+{
+  "security": {
+    "require_auth": false
+  }
+}
+```
+
+This disables authentication entirely for HTTP mode. Only use it on trusted,
+isolated networks.
+
+### Host / Port / Path Precedence
+
+HTTP server settings resolve in this order (highest wins):
+
+1. CLI flags — `--host`, `--port`, `--path`
+2. Config file `server` section — `server.host`, `server.port`, `server.path`
+3. Built-in defaults — `0.0.0.0`, `8815`, `/netops-mcp`
+
+`--config` falls back to the `NETOPS_MCP_CONFIG` environment variable when
+omitted. Note that `start_http_server.sh` always passes CLI flags (from
+`HTTP_HOST`/`HTTP_PORT`/`HTTP_PATH` or its own defaults), so the config
+file's `server` section takes effect when launching the module directly:
+`python -m netops_mcp.server_http --config config/config.json`.
+
+### CORS
+
+CORS is disabled by default (`enable_cors: false`). When enabling it, list
+explicit origins — wildcard origins combined with credentials are rejected
+at config load time:
+
+```json
+{
+  "security": {
+    "enable_cors": true,
+    "cors_origins": ["https://app.example.com"],
+    "cors_allow_credentials": false
+  }
+}
+```
+
+`cors_allow_credentials` defaults to `false` and is passed straight to the
+CORS middleware. Setting `cors_allow_credentials: true` while `cors_origins`
+contains a wildcard (`"*"`) fails config validation.
 
 ## 📖 API Reference
 
@@ -343,7 +475,11 @@ The server will automatically create a default configuration file from `config/c
     "allow_privileged_commands": false,
     "allowed_hosts": [],
     "rate_limit_requests": 100,
-    "rate_limit_window": 60
+    "rate_limit_window": 60,
+    "require_auth": true,
+    "api_keys": [
+      "sha256:0f70dbbe4175927d0c7ff3bdc45622f13e6a5d306248731395a8995974effe25"
+    ]
   },
   "network": {
     "default_timeout": 30,
@@ -429,7 +565,7 @@ curl -X POST http://localhost:8815/netops-mcp \
 ### Network Security
 
 - **Firewall Rules**: Configure appropriate firewall rules for the server port
-- **Access Control**: Implement authentication if needed
+- **Access Control**: API key authentication is required by default in HTTP mode (see [Authentication](#-authentication-breaking-change))
 - **Network Isolation**: Run in isolated network environments when possible
 
 ### Tool Security
@@ -449,17 +585,21 @@ curl -X POST http://localhost:8815/netops-mcp \
 
 ### Quick Production Setup
 
-1. **Generate API Keys**:
+1. **Generate API Keys** (writes `sha256:<hex>` digests into the config and
+   enables `require_auth`; the plain keys are printed once — save them):
    ```bash
    python scripts/generate_api_key.py -n 2 --config config/config.json
    ```
 
-2. **Configure Security** (`config/config.json`):
+2. **Verify Security Settings** (`config/config.json` — only hashed keys are
+   accepted; see [Authentication](#-authentication-breaking-change)):
    ```json
    {
      "security": {
        "require_auth": true,
-       "api_keys": ["your-generated-key-here"],
+       "api_keys": [
+         "sha256:0f70dbbe4175927d0c7ff3bdc45622f13e6a5d306248731395a8995974effe25"
+       ],
        "rate_limit_requests": 100,
        "rate_limit_window": 60
      }
@@ -478,10 +618,13 @@ curl -X POST http://localhost:8815/netops-mcp \
 
 ### Authentication
 
-The server supports API key authentication for secure access:
+API key authentication is **required by default** in HTTP mode — clients send
+the plain key, the server stores and compares only `sha256:` digests. Full
+details (key generation, hashing, opt-out) are in
+[Authentication](#-authentication-breaking-change):
 
 ```bash
-# Make authenticated request
+# Make authenticated request (plain key, not the sha256: digest)
 curl -X POST http://localhost:8815/netops-mcp \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \

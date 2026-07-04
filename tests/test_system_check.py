@@ -8,6 +8,7 @@ import psutil
 from unittest.mock import Mock, patch, MagicMock
 from netops_mcp.utils.system_check import (
     check_required_tools,
+    check_privileged_access,
     get_system_info,
     is_tool_available,
     get_tool_version,
@@ -371,9 +372,9 @@ class TestSystemCheck:
         """Test system info when psutil operations fail."""
         mock_psutil.cpu_count.side_effect = Exception("CPU count error")
         mock_psutil.virtual_memory.side_effect = Exception("Memory error")
-        
+
         info = get_system_info()
-        
+
         # Should still return basic info even if psutil fails
         assert 'platform' in info
         assert 'python_version' in info
@@ -382,3 +383,54 @@ class TestSystemCheck:
         # CPU and memory might be None or have default values
         assert 'cpu_count' in info
         assert 'memory_total' in info
+
+
+class TestCheckPrivilegedAccess:
+    """Test cases for check_privileged_access (SEC-07).
+
+    First-ever coverage for this function. The probes go through _run(),
+    which calls subprocess.run in-module, so patching
+    'netops_mcp.utils.system_check.subprocess.run' covers all four probes.
+    """
+
+    @patch('netops_mcp.utils.system_check.subprocess.run')
+    def test_privileged_access_all_available(self, mock_run):
+        """All probes exit 0 -> every check in the returned dict is True."""
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+
+        checks = check_privileged_access()
+
+        assert checks == {
+            'can_ping': True,
+            'can_traceroute': True,
+            'can_nmap': True,
+            'can_arp': True
+        }
+
+    @patch('netops_mcp.utils.system_check.subprocess.run')
+    def test_privileged_access_missing_binaries(self, mock_run):
+        """Missing binaries degrade gracefully: no raise, all checks False."""
+        mock_run.side_effect = FileNotFoundError("no such binary")
+
+        checks = check_privileged_access()
+
+        assert checks == {
+            'can_ping': False,
+            'can_traceroute': False,
+            'can_nmap': False,
+            'can_arp': False
+        }
+
+    @patch('netops_mcp.utils.system_check.subprocess.run')
+    def test_privileged_access_keyboard_interrupt_propagates(self, mock_run):
+        """SEC-07: KeyboardInterrupt must propagate, never be swallowed.
+
+        A bare `except:` catches BaseException, silently eating Ctrl-C during
+        the privilege probes. The handlers must use the specific tuple
+        (subprocess.SubprocessError, FileNotFoundError, OSError) so operator
+        interrupts escape.
+        """
+        mock_run.side_effect = KeyboardInterrupt
+
+        with pytest.raises(KeyboardInterrupt):
+            check_privileged_access()

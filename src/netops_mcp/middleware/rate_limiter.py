@@ -6,10 +6,11 @@ Supports per-API-key rate limiting and configurable limits per endpoint.
 """
 
 import asyncio
-import time
 import logging
-from typing import Dict, Tuple, Optional, Callable, Awaitable
+import time
 from collections import defaultdict
+from typing import Awaitable, Callable, Dict, Optional, Tuple
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -151,7 +152,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.rate_limiter = RateLimiter(requests_per_window, window_seconds)
         self.exempt_paths = exempt_paths or {"/health", "/metrics"}
         
-        logger.info(f"Rate limit middleware initialized")
+        logger.info("Rate limit middleware initialized")
         logger.info(f"Exempt paths: {self.exempt_paths}")
     
     def _get_client_identifier(self, request: Request) -> str:

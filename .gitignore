@@ -184,3 +184,8 @@ coverage.xml
 
 # uv
 .uv/
+
+# AI/planning artifacts (local only — never publish)
+.planning/
+.claude/
+.impeccable/

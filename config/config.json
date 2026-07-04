@@ -8,7 +8,9 @@
     "allow_privileged_commands": false,
     "allowed_hosts": [],
     "rate_limit_requests": 100,
-    "rate_limit_window": 60
+    "rate_limit_window": 60,
+    "require_auth": true,
+    "api_keys": []
   },
   "network": {
     "default_timeout": 30,

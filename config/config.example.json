@@ -9,10 +9,11 @@
     "allowed_hosts": [],
     "rate_limit_requests": 100,
     "rate_limit_window": 60,
-    "require_auth": false,
+    "require_auth": true,
     "api_keys": [],
     "enable_cors": false,
-    "cors_origins": ["*"]
+    "cors_origins": ["http://localhost:3000"],
+    "cors_allow_credentials": false
   },
   "network": {
     "default_timeout": 30,

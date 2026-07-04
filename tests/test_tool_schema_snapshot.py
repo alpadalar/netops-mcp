@@ -52,7 +52,7 @@ FAKE_SYSTEM_INFO: Dict[str, Any] = {
 
 
 def _build_servers() -> Tuple[Any, Any]:
-    """Instantiate both servers with system checks and the health thread patched out.
+    """Instantiate both servers with system checks patched out.
 
     Patch targets are the IMPORTING module's bindings (``server.py`` aliases the
     checker as ``check_tools_status``) — patching
@@ -60,11 +60,12 @@ def _build_servers() -> Tuple[Any, Any]:
     Phase 3 (03-01) extracted the tool closures into ``netops_mcp.tools.registry``,
     so the ``check_required_tools`` / ``health`` closures now resolve
     ``check_tools_status`` / ``get_system_info`` in the registry module — those
-    bindings are patched here too. (The HTTP server no longer imports
-    ``get_system_info`` directly, so only ``server_http.check_tools_status``
-    remains a valid server-module target.)
-    ``_setup_health_check`` is neutralized because it otherwise starts a daemon
-    thread that forks ~15 subprocesses every 30s for the whole pytest session.
+    bindings are patched here too. The HTTP server's PERF-03 startup cache
+    (``self._tool_status_cache = check_tools_status()``) resolves the
+    ``server_http.check_tools_status`` binding, patched here so construction
+    forks no subprocesses. (03-04 deleted ``_setup_health_check`` — the daemon
+    thread that used to fork ~15 subprocesses every 30s — so its former patch
+    line is gone; patching a deleted attribute would raise AttributeError.)
     """
     patches = [
         patch("netops_mcp.server.check_tools_status", return_value=FAKE_TOOL_STATUS),
@@ -72,10 +73,6 @@ def _build_servers() -> Tuple[Any, Any]:
         patch("netops_mcp.server_http.check_tools_status", return_value=FAKE_TOOL_STATUS),
         patch("netops_mcp.tools.registry.check_tools_status", return_value=FAKE_TOOL_STATUS),
         patch("netops_mcp.tools.registry.get_system_info", return_value=FAKE_SYSTEM_INFO),
-        patch(
-            "netops_mcp.server_http.NetOpsMCPHTTPServer._setup_health_check",
-            lambda self: None,
-        ),
     ]
     with ExitStack() as stack:
         for p in patches:

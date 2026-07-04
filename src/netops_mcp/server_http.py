@@ -6,13 +6,11 @@ supporting both regular HTTP and streamable HTTP transports.
 """
 
 import hashlib
-import json
 import logging
 import os
 import secrets
 import signal
 import sys
-import time
 from typing import Optional
 
 try:
@@ -25,21 +23,25 @@ except ImportError:
     except ImportError:
         FASTMCP_AVAILABLE = False
 
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import JSONResponse
+
 from .config.loader import load_config
 from .core.logging import setup_logging
-from .tools.network.http_tools import HTTPTools
-from .tools.network.connectivity_tools import ConnectivityTools
-from .tools.network.dns_tools import DNSTools
-from .tools.network.discovery_tools import DiscoveryTools
-from .tools.system.network_tools import NetworkTools
-from .tools.system.monitoring_tools import MonitoringTools
-from .tools.security.scanning_tools import ScanningTools
-from .tools.registry import register_tools
-from .utils.system_check import check_required_tools as check_tools_status
 from .middleware.auth import AuthenticationMiddleware
-from .middleware.rate_limiter import RateLimitMiddleware
 from .middleware.metrics import MetricsMiddleware, create_metrics_endpoint
-
+from .middleware.rate_limiter import RateLimitMiddleware
+from .tools.network.connectivity_tools import ConnectivityTools
+from .tools.network.discovery_tools import DiscoveryTools
+from .tools.network.dns_tools import DNSTools
+from .tools.network.http_tools import HTTPTools
+from .tools.registry import register_tools
+from .tools.security.scanning_tools import ScanningTools
+from .tools.system.monitoring_tools import MonitoringTools
+from .tools.system.network_tools import NetworkTools
+from .utils.system_check import check_required_tools as check_tools_status
 
 logger = logging.getLogger("netops-mcp.http")
 
@@ -93,203 +95,118 @@ class NetOpsMCPHTTPServer:
         
         # Initialize FastMCP
         self.mcp = FastMCP("NetOpsMCP-HTTP")
-        
-        # Add health check endpoint
-        self._setup_health_check()
 
         # Register the shared 26-tool surface (REF-04). tool_count is derived
         # dynamically from the FastMCP instance (REF-05), replacing the former
         # hardcoded 26 in the tool-registration path.
         self.tool_count = register_tools(self.mcp, self)
 
-    def _setup_health_check(self):
-        """Setup health check endpoint for Docker."""
-        # FastMCP doesn't expose app directly, so we'll use a different approach
-        # We'll create a simple health check file that can be checked
-        import os
-        import time
-        
-        health_file = "/tmp/netops-mcp-health"
-        
-        # Create a simple health check function
-        def update_health_status():
-            try:
-                # Count MCP tools (26 total)
-                mcp_tools = [
-                    # HTTP/API Testing Tools (3)
-                    "curl_request", "httpie_request", "api_test",
-                    # Network Connectivity Tools (5)
-                    "ping_host", "traceroute_path", "mtr_monitor", "telnet_connect", "netcat_test",
-                    # DNS Tools (3)
-                    "nslookup_query", "dig_query", "host_lookup",
-                    # Network Discovery Tools (2)
-                    "nmap_scan", "service_discovery",
-                    # System Network Tools (4)
-                    "ss_connections", "netstat_connections", "arp_table", "arping_host",
-                    # System Monitoring Tools (5)
-                    "system_status", "cpu_usage", "memory_usage", "disk_usage", "process_list",
-                    # Security Tools (2)
-                    "port_scan", "service_enumeration",
-                    # System Tools (2)
-                    "check_required_tools", "health"
-                ]
-                
-                # Count system tools
-                system_tools = check_tools_status()
-                available_system_tools = len(system_tools['available_tools'])
-                total_system_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
-                
-                health_data = {
-                    "status": "healthy",
-                    "server": "NetOpsMCP-HTTP",
-                    "mcp_tools": len(mcp_tools),
-                    "system_tools_available": available_system_tools,
-                    "system_tools_total": total_system_tools,
-                    "total_tools": len(mcp_tools) + total_system_tools,
-                    "timestamp": time.time()
-                }
-                
-                with open(health_file, 'w') as f:
-                    json.dump(health_data, f)
-                    
-            except Exception as e:
-                health_data = {
-                    "status": "unhealthy",
-                    "error": str(e),
-                    "timestamp": time.time()
-                }
-                
-                with open(health_file, 'w') as f:
-                    json.dump(health_data, f)
-        
-        # Update health status every 30 seconds
-        import threading
-        
-        def health_check_loop():
-            while True:
-                update_health_status()
-                time.sleep(30)
-        
-        # Start health check thread
-        health_thread = threading.Thread(target=health_check_loop, daemon=True)
-        health_thread.start()
+        # PERF-03: cache system-tool availability ONCE at startup instead of
+        # forking ~15 subprocess probes every 30s from a background thread. The
+        # /health route reads this cache; no per-hit fork storm.
+        self._tool_status_cache = check_tools_status()
 
-    def _add_health_endpoint(self):
-        """Add custom health endpoint and middleware to FastMCP HTTP transport."""
-        try:
-            self.logger.info("Attempting to add custom health endpoint and middleware...")
-            self.logger.info(f"FastMCP object type: {type(self.mcp)}")
-            self.logger.info(f"FastMCP attributes: {dir(self.mcp)}")
-            
-            # FastMCP HTTP transport'ına custom endpoint ekle
-            if hasattr(self.mcp, 'http_app') and callable(self.mcp.http_app):
-                self.logger.info("FastMCP http_app method found, getting Starlette app...")
-                # Starlette app'i al
-                starlette_app = self.mcp.http_app()
-                self.logger.info(f"Starlette app type: {type(starlette_app)}")
-                
-                # Add middleware
-                self._add_middleware(starlette_app)
-                
-                # Starlette app'e health endpoint ekle
-                from starlette.responses import JSONResponse
-                
-                async def health_endpoint(request):
-                    try:
-                        # System tools kontrolü
-                        system_tools = check_tools_status()
-                        available_tools = len(system_tools['available_tools'])
-                        total_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
-                        
-                        return JSONResponse({
-                            "status": "healthy",
-                            "server": "NetOpsMCP-HTTP",
-                            "mcp_tools": 26,  # Total MCP tools
-                            "system_tools_available": available_tools,
-                            "system_tools_total": total_tools,
-                            "total_tools": 26 + total_tools,
-                            "authentication": self.config.security.require_auth,
-                            "rate_limiting": True,
-                            "timestamp": time.time()
-                        })
-                    except Exception as e:
-                        return JSONResponse({
-                            "status": "unhealthy",
-                            "error": str(e),
-                            "timestamp": time.time()
-                        }, status_code=500)
-                
-                # Starlette app'e route ekle
-                starlette_app.add_route("/health", health_endpoint, methods=["GET"])
-                self.logger.info("Custom health endpoint added at /health")
-                
-                # Add metrics endpoint
-                metrics_endpoint_handler = create_metrics_endpoint()
-                starlette_app.add_route("/metrics", metrics_endpoint_handler, methods=["GET"])
-                self.logger.info("Metrics endpoint added at /metrics")
-            else:
-                self.logger.warning("FastMCP http_app method not available, using file-based health check")
-                self.logger.info(f"Available attributes: {[attr for attr in dir(self.mcp) if not attr.startswith('_')]}")
-                
-        except Exception as e:
-            self.logger.warning(f"Could not add custom health endpoint: {e}")
-            self.logger.info("Using file-based health check as fallback")
-    
-    def _add_middleware(self, app):
-        """Add middleware to Starlette app."""
-        try:
-            # Add metrics middleware (first, so it tracks all requests)
-            app.add_middleware(MetricsMiddleware)
-            self.logger.info("Metrics middleware enabled")
-            
-            # Add CORS middleware if enabled
-            if self.config.security.enable_cors:
-                from starlette.middleware.cors import CORSMiddleware
-                app.add_middleware(
+        # REF-07: register /health and /metrics on the FastMCP instance BEFORE
+        # any build_http_app() call, so custom_route bakes them into the
+        # ACTUALLY served app (via mcp._additional_http_routes) rather than the
+        # throwaway app the old (now-removed) health wiring configured.
+        self._register_http_routes()
+
+    def _register_http_routes(self) -> None:
+        """Register /health and /metrics on the REAL served app (REF-07).
+
+        ``custom_route`` appends to ``mcp._additional_http_routes``, which
+        FastMCP's ``create_streamable_http_app`` bakes into whichever Starlette
+        app :meth:`build_http_app` constructs. That is what makes these routes —
+        and the middleware stack — live on the ACTUALLY served app instead of the
+        throwaway ``http_app()`` the old (now-removed) health wiring configured.
+        Must run in ``__init__`` before any :meth:`build_http_app` call.
+        """
+        metrics_handler = create_metrics_endpoint()
+
+        @self.mcp.custom_route("/health", methods=["GET"])
+        async def health(request):
+            """Liveness/readiness endpoint backed by the startup tool cache.
+
+            Reads the PERF-03 startup cache (no per-hit subprocess fork) and
+            reports the dynamic MCP tool count (REF-05). Exempt from auth and
+            rate limiting so container/orchestrator probes always succeed —
+            this is the route the Docker/compose healthcheck curls at ROOT.
+            """
+            cache = self._tool_status_cache
+            available = len(cache["available_tools"])
+            total = available + len(cache["missing_tools"])
+            return JSONResponse({
+                "status": "healthy",
+                "server": "NetOpsMCP-HTTP",
+                "mcp_tools": self.tool_count,
+                "system_tools_available": available,
+                "system_tools_total": total,
+                "authentication": self.config.security.require_auth,
+            })
+
+        @self.mcp.custom_route("/metrics", methods=["GET"])
+        async def metrics(request):
+            """Prometheus metrics endpoint delegating to the global collector."""
+            return await metrics_handler(request)
+
+    def build_http_app(self):
+        """Build the ACTUALLY-served Starlette app with the middleware stack (REF-07).
+
+        The single served app is constructed via
+        ``FastMCP.http_app(path=, middleware=[...])`` so the auth, rate-limit,
+        CORS, metrics and trusted-host middleware attach to the app uvicorn
+        serves — closing the Phase 2 CR-01 throwaway-app bypass. The /health and
+        /metrics routes registered by :meth:`_register_http_routes` are baked in
+        by FastMCP from ``mcp._additional_http_routes``.
+
+        Middleware ordering trap (RESEARCH Pitfall 3): ``add_middleware`` is
+        LIFO/prepend (last added = outermost), but a ``Middleware([...])`` list
+        is applied first=outermost. The list is therefore built in
+        outermost->inner order ``[TrustedHost, Auth, RateLimit, CORS, Metrics]``
+        to preserve the request flow the former ``_add_middleware`` produced.
+        """
+        security = self.config.security
+        middleware = []
+
+        if security.allowed_hosts:
+            middleware.append(
+                Middleware(TrustedHostMiddleware, allowed_hosts=security.allowed_hosts)
+            )
+
+        if security.require_auth and security.api_keys:
+            middleware.append(
+                Middleware(
+                    AuthenticationMiddleware,
+                    api_keys=security.api_keys,
+                    require_auth=True,
+                    exempt_paths={"/health", "/metrics"},
+                )
+            )
+
+        middleware.append(
+            Middleware(
+                RateLimitMiddleware,
+                requests_per_window=security.rate_limit_requests,
+                window_seconds=security.rate_limit_window,
+                exempt_paths={"/health", "/metrics"},
+            )
+        )
+
+        if security.enable_cors:
+            middleware.append(
+                Middleware(
                     CORSMiddleware,
-                    allow_origins=self.config.security.cors_origins,
-                    allow_credentials=self.config.security.cors_allow_credentials,
+                    allow_origins=security.cors_origins,
+                    allow_credentials=security.cors_allow_credentials,
                     allow_methods=["*"],
                     allow_headers=["*"],
                 )
-                self.logger.info(f"CORS middleware enabled for origins: {self.config.security.cors_origins}")
-            
-            # Add rate limiting middleware
-            app.add_middleware(
-                RateLimitMiddleware,
-                requests_per_window=self.config.security.rate_limit_requests,
-                window_seconds=self.config.security.rate_limit_window,
-                exempt_paths={"/health", "/metrics"}
             )
-            self.logger.info(
-                f"Rate limiting enabled: {self.config.security.rate_limit_requests} "
-                f"requests per {self.config.security.rate_limit_window}s"
-            )
-            
-            # Add authentication middleware if required
-            if self.config.security.require_auth:
-                if not self.config.security.api_keys:
-                    self.logger.warning("Authentication required but no API keys configured!")
-                else:
-                    app.add_middleware(
-                        AuthenticationMiddleware,
-                        api_keys=self.config.security.api_keys,
-                        require_auth=True,
-                        exempt_paths={"/health", "/metrics"}
-                    )
-                    self.logger.info(f"Authentication enabled with {len(self.config.security.api_keys)} API key(s)")
-            
-            # Add security headers middleware
-            from starlette.middleware.trustedhost import TrustedHostMiddleware
-            if self.config.security.allowed_hosts:
-                app.add_middleware(
-                    TrustedHostMiddleware,
-                    allowed_hosts=self.config.security.allowed_hosts
-                )
-                self.logger.info(f"Trusted host middleware enabled for: {self.config.security.allowed_hosts}")
-            
-        except Exception as e:
-            self.logger.error(f"Error adding middleware: {e}")
+
+        middleware.append(Middleware(MetricsMiddleware))
+
+        return self.mcp.http_app(path=self.path, middleware=middleware)
 
     def run(self) -> None:
         """
@@ -327,17 +244,25 @@ class NetOpsMCPHTTPServer:
 
         try:
             self.logger.info(f"Starting NetOpsMCP HTTP server on {self.host}:{self.port}{self.path}")
-            
-            # Add custom health endpoint before starting server
-            self._add_health_endpoint()
-            
-            # Run with FastMCP's built-in HTTP transport
-            self.mcp.run(
-                transport="http",
-                host=self.host,
-                port=self.port,
-                path=self.path
-            )
+
+            # REF-07: build the ONE served app (middleware + /health + /metrics
+            # baked in) and drive uvicorn on it directly. Driving uvicorn here
+            # (instead of FastMCP's own runner) lets the E2E harness serve the
+            # exact same build_http_app() output — the strongest anti-throwaway
+            # design; the harness proves this wiring at runtime.
+            app = self.build_http_app()
+
+            import uvicorn
+
+            uvicorn.Server(
+                uvicorn.Config(
+                    app,
+                    host=self.host,
+                    port=self.port,
+                    log_level="info",
+                    lifespan="on",
+                )
+            ).run()
         except Exception as e:
             self.logger.error(f"HTTP server error: {e}")
             sys.exit(1)

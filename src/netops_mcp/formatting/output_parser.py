@@ -44,9 +44,12 @@ class OutputParser:
                             stats["packets_received"] / stats["packets_transmitted"] * 100
                         )
                     else:
-                        # Zero packets transmitted (BUG-01): total loss,
-                        # rtt values are meaningless — report them as null.
+                        # Zero packets transmitted (BUG-01): total loss.
                         stats["packet_loss_percent"] = 100
+                    if stats["packets_received"] == 0:
+                        # No replies (BUG-01 / WR-02): rtt values are
+                        # meaningless — report them as null instead of
+                        # misleading integer zeros for dead hosts.
                         stats["min_rtt"] = None
                         stats["avg_rtt"] = None
                         stats["max_rtt"] = None

@@ -624,6 +624,12 @@ class TestConnectivityTools:
         assert "stats" in data
         assert data["stats"]["packets_transmitted"] == 2
         assert data["stats"]["packet_loss_percent"] == 100.0
+        # WR-02: no replies means rtt values are meaningless — they must be
+        # null, not misleading zero-latency figures for a dead host.
+        assert data["stats"]["min_rtt"] is None
+        assert data["stats"]["avg_rtt"] is None
+        assert data["stats"]["max_rtt"] is None
+        assert data["stats"]["mdev_rtt"] is None
         assert "error" not in data
 
     def test_ping_host_zero_tx_returns_stats_no_zerodivision(self, mock_execute_command,

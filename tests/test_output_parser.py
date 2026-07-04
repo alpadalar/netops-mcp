@@ -51,6 +51,18 @@ class TestParsePingOutput:
         assert stats["max_rtt"] == 1.45
         assert stats["mdev_rtt"] == 0.11
 
+    def test_parse_ping_output_unreachable_rtt_null(self, sample_ping_unreachable_output):
+        """100% loss with packets transmitted (WR-02): rtt fields are None, not 0."""
+        stats = OutputParser.parse_ping_output(sample_ping_unreachable_output["stdout"])
+
+        assert stats["packets_transmitted"] == 2
+        assert stats["packets_received"] == 0
+        assert stats["packet_loss_percent"] == 100.0
+        assert stats["min_rtt"] is None
+        assert stats["avg_rtt"] is None
+        assert stats["max_rtt"] is None
+        assert stats["mdev_rtt"] is None
+
     def test_parse_ping_output_zero_transmitted(self, sample_ping_zero_tx_output):
         """Zero-tx stats block (BUG-01): loss 100, all rtt fields None."""
         stats = OutputParser.parse_ping_output(sample_ping_zero_tx_output["stdout"])

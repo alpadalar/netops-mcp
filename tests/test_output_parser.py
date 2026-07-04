@@ -146,6 +146,20 @@ class TestParseTracerouteOutput:
         assert hops[4]["host"] == "google.com"
         assert hops[4]["times"] == [15.678, 15.432, 15.567]
 
+    def test_parse_traceroute_output_skips_continuation_lines(self):
+        """Non-numeric first token (WR-05): line is skipped, parse still succeeds."""
+        output = """traceroute to example.com (93.184.216.34), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.1.1)  1.234 ms  0.987 ms  1.123 ms
+    alt-responder.example.net (10.9.9.9)  2.345 ms  2.456 ms  2.567 ms
+ 2  10.0.0.1 (10.0.0.1)  5.678 ms  5.432 ms  5.567 ms"""
+
+        hops = OutputParser.parse_traceroute_output(output)
+
+        # The wrapped responder line must be skipped, not raise ValueError
+        assert len(hops) == 2
+        assert hops[0]["hop_number"] == 1
+        assert hops[1]["hop_number"] == 2
+
 
 class TestParseMtrOutput:
     """Characterization tests for OutputParser.parse_mtr_output.

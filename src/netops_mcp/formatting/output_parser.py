@@ -86,8 +86,16 @@ class OutputParser:
             if line.strip() and not line.startswith('traceroute'):
                 parts = line.split()
                 if len(parts) >= 4:
+                    # WR-05: continuation/diagnostic lines (wrapped responder
+                    # lines, MPLS extensions) have a non-numeric first token;
+                    # skip them instead of letting ValueError escape and turn
+                    # the whole successful traceroute into an error response.
+                    try:
+                        hop_number = int(parts[0])
+                    except ValueError:
+                        continue  # not a hop line
                     hop_info = {
-                        "hop_number": int(parts[0]),
+                        "hop_number": hop_number,
                         "host": parts[1],
                         "ip": parts[1],
                         "times": []

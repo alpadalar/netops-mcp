@@ -317,7 +317,16 @@ class NetOpsMCPServer:
                 self.logger.info("Running startup tests (pytest)...")
                 env = os.environ.copy()
                 env["PYTHONPATH"] = f"{os.getcwd()}/src" + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-                result = subprocess.run([sys.executable, "-m", "pytest", "-q"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+                # WR-01: stdin=DEVNULL — without it the pytest child (and the
+                # entire test process tree it spawns) inherits fd 0, which at
+                # this point is already the client's MCP JSON-RPC pipe.
+                result = subprocess.run(
+                    [sys.executable, "-m", "pytest", "-q"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=subprocess.DEVNULL,
+                    env=env,
+                )
                 self._tests_passed = (result.returncode == 0)
                 if not self._tests_passed:
                     self.logger.error("Startup tests failed. Health will be 'degraded'. Output:\n" + result.stdout.decode())

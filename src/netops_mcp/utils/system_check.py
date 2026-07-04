@@ -19,6 +19,20 @@ REQUIRED_TOOLS = [
 ]
 
 
+def _run(command: List[str], **kwargs: Any) -> subprocess.CompletedProcess:
+    """Run a child process with stdin detached from the server's fd 0.
+
+    WR-01 (same defect class as CR-01 in tools/base.py): capture_output only
+    redirects stdout/stderr, so without stdin=DEVNULL every probe spawned
+    here would inherit the server's stdin — which in stdio transport mode IS
+    the MCP JSON-RPC stream. A probe variant that falls back to interactive
+    mode (e.g. a non-BIND nslookup rejecting -version) would consume and
+    discard protocol bytes. All subprocess spawns in this module must go
+    through this helper.
+    """
+    return subprocess.run(command, stdin=subprocess.DEVNULL, **kwargs)
+
+
 def check_required_tools(tools: List[str] = None) -> Dict[str, Any]:
     """Check if required system tools are available.
 
@@ -59,34 +73,34 @@ def is_tool_available(tool_name: str) -> bool:
     try:
         # Try to get version information to check availability
         if tool_name == 'curl':
-            result = subprocess.run(['curl', '--version'], 
+            result = _run(['curl', '--version'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'nmap':
-            result = subprocess.run(['nmap', '--version'], 
+            result = _run(['nmap', '--version'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'ping':
-            result = subprocess.run(['ping', '-V'], 
+            result = _run(['ping', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'nc':
-            result = subprocess.run(['nc', '-h'], 
+            result = _run(['nc', '-h'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'nslookup':
-            result = subprocess.run(['nslookup', '-version'], 
+            result = _run(['nslookup', '-version'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'dig':
-            result = subprocess.run(['dig', '-v'], 
+            result = _run(['dig', '-v'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'host':
-            result = subprocess.run(['host', '-V'], 
+            result = _run(['host', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'arping':
-            result = subprocess.run(['arping', '-V'],
+            result = _run(['arping', '-V'],
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'http':
-            result = subprocess.run(['http', '--version'],
+            result = _run(['http', '--version'],
                                   capture_output=True, text=True, timeout=5)
         else:
-            result = subprocess.run([tool_name, '--version'],
+            result = _run([tool_name, '--version'],
                                   capture_output=True, text=True, timeout=5)
 
         return result.returncode == 0
@@ -105,34 +119,34 @@ def get_tool_version(tool_name: str) -> str:
     """
     try:
         if tool_name == 'curl':
-            result = subprocess.run(['curl', '--version'], 
+            result = _run(['curl', '--version'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'nmap':
-            result = subprocess.run(['nmap', '--version'], 
+            result = _run(['nmap', '--version'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'ping':
-            result = subprocess.run(['ping', '-V'], 
+            result = _run(['ping', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'nc':
-            result = subprocess.run(['nc', '-h'], 
+            result = _run(['nc', '-h'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'nslookup':
-            result = subprocess.run(['nslookup', '-version'], 
+            result = _run(['nslookup', '-version'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'dig':
-            result = subprocess.run(['dig', '-v'], 
+            result = _run(['dig', '-v'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'host':
-            result = subprocess.run(['host', '-V'], 
+            result = _run(['host', '-V'], 
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'arping':
-            result = subprocess.run(['arping', '-V'],
+            result = _run(['arping', '-V'],
                                   capture_output=True, text=True, timeout=5)
         elif tool_name == 'http':
-            result = subprocess.run(['http', '--version'],
+            result = _run(['http', '--version'],
                                   capture_output=True, text=True, timeout=5)
         else:
-            result = subprocess.run([tool_name, '--version'],
+            result = _run([tool_name, '--version'],
                                   capture_output=True, text=True, timeout=5)
 
         if result.returncode == 0:
@@ -301,7 +315,7 @@ def validate_network_access(host: str = "8.8.8.8") -> bool:
         True if network access is available
     """
     try:
-        result = subprocess.run(['ping', '-c', '1', '-W', '5', host], 
+        result = _run(['ping', '-c', '1', '-W', '5', host], 
                               capture_output=True, timeout=10)
         return result.returncode == 0
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
@@ -323,7 +337,7 @@ def check_privileged_access() -> Dict[str, bool]:
     
     try:
         # Test ping
-        result = subprocess.run(['ping', '-c', '1', '127.0.0.1'], 
+        result = _run(['ping', '-c', '1', '127.0.0.1'], 
                               capture_output=True, timeout=5)
         checks['can_ping'] = result.returncode == 0
     except:
@@ -331,7 +345,7 @@ def check_privileged_access() -> Dict[str, bool]:
     
     try:
         # Test traceroute
-        result = subprocess.run(['traceroute', '-m', '1', '127.0.0.1'], 
+        result = _run(['traceroute', '-m', '1', '127.0.0.1'], 
                               capture_output=True, timeout=5)
         checks['can_traceroute'] = result.returncode == 0
     except:
@@ -339,7 +353,7 @@ def check_privileged_access() -> Dict[str, bool]:
     
     try:
         # Test nmap
-        result = subprocess.run(['nmap', '-sn', '127.0.0.1'], 
+        result = _run(['nmap', '-sn', '127.0.0.1'], 
                               capture_output=True, timeout=5)
         checks['can_nmap'] = result.returncode == 0
     except:
@@ -347,7 +361,7 @@ def check_privileged_access() -> Dict[str, bool]:
     
     try:
         # Test arp
-        result = subprocess.run(['arp', '-a'], 
+        result = _run(['arp', '-a'], 
                               capture_output=True, timeout=5)
         checks['can_arp'] = result.returncode == 0
     except:

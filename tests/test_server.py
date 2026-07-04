@@ -140,16 +140,20 @@ class TestNetOpsMCPServer:
         RecursionError under SDK FastMCP); either way the ``except`` clause
         converts it into an ``{"error": ...}`` payload.
 
-        NOTE: Task 2 renames the server_http import to ``check_tools_status``
-        (aliased import defeating the shadowing); this test's patch target
-        changes to ``netops_mcp.server_http.check_tools_status`` in the SAME
-        commit as the rename.
+        NOTE: Phase 3 (03-01) extracts the tool closures into the shared
+        ``netops_mcp.tools.registry`` module, which owns the aliased
+        ``check_tools_status`` / ``get_system_info`` bindings the closure
+        resolves. The patch target therefore moves to
+        ``netops_mcp.tools.registry.*`` in the SAME commit as the extraction.
+        The registry also unifies the response envelope onto the typed
+        ``mcp.types.TextContent`` (attribute ``.text``), replacing the HTTP
+        server's former plain-dict ``["text"]`` form.
         """
         from netops_mcp.server_http import NetOpsMCPHTTPServer
 
-        with patch('netops_mcp.server_http.check_tools_status',
+        with patch('netops_mcp.tools.registry.check_tools_status',
                    return_value=dict(FAKE_TOOL_STATUS)), \
-             patch('netops_mcp.server_http.get_system_info',
+             patch('netops_mcp.tools.registry.get_system_info',
                    return_value=dict(FAKE_SYSTEM_INFO)), \
              patch('netops_mcp.server_http.NetOpsMCPHTTPServer._setup_health_check',
                    lambda self: None):
@@ -158,8 +162,8 @@ class TestNetOpsMCPServer:
             # fastmcp 2.11.3 FunctionTool keeps the original closure on `fn`
             result = tools['check_required_tools'].fn()
 
-        assert 'recursion' not in result[0]['text'].lower()
-        payload = json.loads(result[0]['text'])
+        assert 'recursion' not in result[0].text.lower()
+        payload = json.loads(result[0].text)
         assert 'error' not in payload
         assert 'nmap' in payload['missing_tools']
         assert 'mtr' in payload['missing_tools']

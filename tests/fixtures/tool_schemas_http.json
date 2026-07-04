@@ -5,6 +5,7 @@
       "properties": {
         "expected_status": {
           "default": 200,
+          "description": "Expected HTTP status",
           "title": "Expected Status",
           "type": "integer"
         },
@@ -19,19 +20,23 @@
             }
           ],
           "default": null,
+          "description": "HTTP headers",
           "title": "Headers"
         },
         "method": {
           "default": "GET",
+          "description": "HTTP method",
           "title": "Method",
           "type": "string"
         },
         "timeout": {
           "default": 30,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         },
         "url": {
+          "description": "API endpoint URL",
           "title": "Url",
           "type": "string"
         }
@@ -55,10 +60,12 @@
       "properties": {
         "count": {
           "default": 4,
+          "description": "Number of packets",
           "title": "Count",
           "type": "integer"
         },
         "host": {
+          "description": "Target host",
           "title": "Host",
           "type": "string"
         }
@@ -97,6 +104,7 @@
             }
           ],
           "default": null,
+          "description": "Request body",
           "title": "Data"
         },
         "headers": {
@@ -110,19 +118,23 @@
             }
           ],
           "default": null,
+          "description": "HTTP headers",
           "title": "Headers"
         },
         "method": {
           "default": "GET",
+          "description": "HTTP method",
           "title": "Method",
           "type": "string"
         },
         "timeout": {
           "default": 30,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         },
         "url": {
+          "description": "Target URL",
           "title": "Url",
           "type": "string"
         }
@@ -138,11 +150,13 @@
     "inputSchema": {
       "properties": {
         "domain": {
+          "description": "Domain to lookup",
           "title": "Domain",
           "type": "string"
         },
         "record_type": {
           "default": "A",
+          "description": "DNS record type",
           "title": "Record Type",
           "type": "string"
         },
@@ -156,6 +170,7 @@
             }
           ],
           "default": null,
+          "description": "DNS server",
           "title": "Server"
         }
       },
@@ -184,11 +199,13 @@
     "inputSchema": {
       "properties": {
         "domain": {
+          "description": "Domain to lookup",
           "title": "Domain",
           "type": "string"
         },
         "record_type": {
           "default": "A",
+          "description": "DNS record type",
           "title": "Record Type",
           "type": "string"
         }
@@ -214,6 +231,7 @@
             }
           ],
           "default": null,
+          "description": "Request data",
           "title": "Data"
         },
         "headers": {
@@ -227,19 +245,23 @@
             }
           ],
           "default": null,
+          "description": "HTTP headers",
           "title": "Headers"
         },
         "method": {
           "default": "GET",
+          "description": "HTTP method",
           "title": "Method",
           "type": "string"
         },
         "timeout": {
           "default": 30,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         },
         "url": {
+          "description": "Target URL",
           "title": "Url",
           "type": "string"
         }
@@ -263,15 +285,18 @@
       "properties": {
         "count": {
           "default": 10,
+          "description": "Number of probes",
           "title": "Count",
           "type": "integer"
         },
         "target": {
+          "description": "Target host",
           "title": "Target",
           "type": "string"
         },
         "timeout": {
           "default": 30,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }
@@ -287,15 +312,18 @@
     "inputSchema": {
       "properties": {
         "host": {
+          "description": "Target host",
           "title": "Host",
           "type": "string"
         },
         "port": {
+          "description": "Target port",
           "title": "Port",
           "type": "integer"
         },
         "timeout": {
           "default": 10,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }
@@ -321,6 +349,7 @@
             }
           ],
           "default": null,
+          "description": "Protocol (tcp/udp)",
           "title": "Protocol"
         },
         "state": {
@@ -333,6 +362,7 @@
             }
           ],
           "default": null,
+          "description": "Connection state",
           "title": "State"
         }
       },
@@ -353,19 +383,23 @@
             }
           ],
           "default": null,
+          "description": "Port range (e.g., '22,80,443')",
           "title": "Ports"
         },
         "scan_type": {
           "default": "basic",
+          "description": "Scan type",
           "title": "Scan Type",
           "type": "string"
         },
         "target": {
+          "description": "Target host or network",
           "title": "Target",
           "type": "string"
         },
         "timeout": {
           "default": 300,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }
@@ -381,11 +415,13 @@
     "inputSchema": {
       "properties": {
         "domain": {
+          "description": "Domain to lookup",
           "title": "Domain",
           "type": "string"
         },
         "record_type": {
           "default": "A",
+          "description": "DNS record type",
           "title": "Record Type",
           "type": "string"
         },
@@ -399,6 +435,7 @@
             }
           ],
           "default": null,
+          "description": "DNS server",
           "title": "Server"
         }
       },
@@ -414,15 +451,18 @@
       "properties": {
         "count": {
           "default": 4,
+          "description": "Number of ping packets",
           "title": "Count",
           "type": "integer"
         },
         "host": {
+          "description": "Target host",
           "title": "Host",
           "type": "string"
         },
         "timeout": {
           "default": 10,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }
@@ -438,15 +478,18 @@
     "inputSchema": {
       "properties": {
         "ports": {
+          "description": "Port range (e.g., '1-1000')",
           "title": "Ports",
           "type": "string"
         },
         "target": {
+          "description": "Target host",
           "title": "Target",
           "type": "string"
         },
         "timeout": {
           "default": 60,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }
@@ -464,6 +507,7 @@
       "properties": {
         "limit": {
           "default": 20,
+          "description": "Number of processes to show",
           "title": "Limit",
           "type": "integer"
         }
@@ -485,9 +529,11 @@
             }
           ],
           "default": null,
+          "description": "Port range",
           "title": "Ports"
         },
         "target": {
+          "description": "Target host",
           "title": "Target",
           "type": "string"
         }
@@ -512,9 +558,11 @@
             }
           ],
           "default": null,
+          "description": "Port range",
           "title": "Ports"
         },
         "target": {
+          "description": "Target host",
           "title": "Target",
           "type": "string"
         }
@@ -539,6 +587,7 @@
             }
           ],
           "default": null,
+          "description": "Protocol (tcp/udp)",
           "title": "Protocol"
         },
         "state": {
@@ -551,6 +600,7 @@
             }
           ],
           "default": null,
+          "description": "Connection state",
           "title": "State"
         }
       },
@@ -569,15 +619,18 @@
     "inputSchema": {
       "properties": {
         "host": {
+          "description": "Target host",
           "title": "Host",
           "type": "string"
         },
         "port": {
+          "description": "Target port",
           "title": "Port",
           "type": "integer"
         },
         "timeout": {
           "default": 10,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }
@@ -595,15 +648,18 @@
       "properties": {
         "max_hops": {
           "default": 30,
+          "description": "Maximum number of hops",
           "title": "Max Hops",
           "type": "integer"
         },
         "target": {
+          "description": "Target host",
           "title": "Target",
           "type": "string"
         },
         "timeout": {
           "default": 30,
+          "description": "Timeout in seconds",
           "title": "Timeout",
           "type": "integer"
         }

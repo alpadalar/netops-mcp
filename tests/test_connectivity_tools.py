@@ -6,6 +6,114 @@ import pytest
 from unittest.mock import patch, MagicMock
 from netops_mcp.tools.network.connectivity_tools import ConnectivityTools
 
+# Byte-compat characterization constants: exact exit-0 MCP response strings
+# captured from pre-delegation code (plan 01-02) by calling the tool methods
+# with the conftest sample fixtures and recording repr(result[0].text).
+# Serialization contract: base.py _format_response json.dumps(data, indent=2, default=str)
+# over insertion-ordered response dicts. Plan 01-04 must keep these green.
+
+EXPECTED_PING_SUCCESS_JSON = (
+    '{\n'
+    '  "host": "google.com",\n'
+    '  "success": true,\n'
+    '  "stats": {\n'
+    '    "packets_transmitted": 4,\n'
+    '    "packets_received": 4,\n'
+    '    "packet_loss_percent": 0.0,\n'
+    '    "min_rtt": 1.23,\n'
+    '    "avg_rtt": 1.395,\n'
+    '    "max_rtt": 1.56,\n'
+    '    "mdev_rtt": 0.134\n'
+    '  },\n'
+    '  "raw_output": "PING google.com (142.250.185.78) 56(84) bytes of data'
+    '.\\n64 bytes from google.com (142.250.185.78): icmp_seq=1 time=1.23 ms\\'
+    'n64 bytes from google.com (142.250.185.78): icmp_seq=2 time=1.45 ms\\n6'
+    '4 bytes from google.com (142.250.185.78): icmp_seq=3 time=1.34 ms\\n64 '
+    'bytes from google.com (142.250.185.78): icmp_seq=4 time=1.56 ms\\n\\n---'
+    ' google.com ping statistics ---\\n4 packets transmitted, 4 received, 0%'
+    ' packet loss, time 3003ms\\nrtt min/avg/max/mdev = 1.230/1.395/1.560/0.'
+    '134 ms"\n'
+    '}'
+)
+
+EXPECTED_TRACEROUTE_SUCCESS_JSON = (
+    '{\n'
+    '  "target": "google.com",\n'
+    '  "success": true,\n'
+    '  "hops": [\n'
+    '    {\n'
+    '      "hop_number": 1,\n'
+    '      "host": "_gateway",\n'
+    '      "ip": "_gateway",\n'
+    '      "times": [\n'
+    '        1.234,\n'
+    '        0.987,\n'
+    '        1.123\n'
+    '      ]\n'
+    '    },\n'
+    '    {\n'
+    '      "hop_number": 2,\n'
+    '      "host": "10.0.0.1",\n'
+    '      "ip": "10.0.0.1",\n'
+    '      "times": [\n'
+    '        5.678,\n'
+    '        5.432,\n'
+    '        5.567\n'
+    '      ]\n'
+    '    },\n'
+    '    {\n'
+    '      "hop_number": 3,\n'
+    '      "host": "172.16.0.1",\n'
+    '      "ip": "172.16.0.1",\n'
+    '      "times": [\n'
+    '        10.123,\n'
+    '        9.876,\n'
+    '        10.234\n'
+    '      ]\n'
+    '    },\n'
+    '    {\n'
+    '      "hop_number": 4,\n'
+    '      "host": "*",\n'
+    '      "ip": "*",\n'
+    '      "times": []\n'
+    '    },\n'
+    '    {\n'
+    '      "hop_number": 5,\n'
+    '      "host": "google.com",\n'
+    '      "ip": "google.com",\n'
+    '      "times": [\n'
+    '        15.678,\n'
+    '        15.432,\n'
+    '        15.567\n'
+    '      ]\n'
+    '    }\n'
+    '  ],\n'
+    '  "raw_output": "traceroute to google.com (142.250.185.78), 30 hops ma'
+    'x, 60 byte packets\\n 1  _gateway (192.168.1.1)  1.234 ms  0.987 ms  1.'
+    '123 ms\\n 2  10.0.0.1 (10.0.0.1)  5.678 ms  5.432 ms  5.567 ms\\n 3  172'
+    '.16.0.1 (172.16.0.1)  10.123 ms  9.876 ms  10.234 ms\\n 4  * * *\\n 5  g'
+    'oogle.com (142.250.185.78)  15.678 ms  15.432 ms  15.567 ms"\n'
+    '}'
+)
+
+EXPECTED_MTR_SUCCESS_JSON = (
+    '{\n'
+    '  "target": "google.com",\n'
+    '  "success": true,\n'
+    '  "stats": {\n'
+    '    "target": "",\n'
+    '    "hops": []\n'
+    '  },\n'
+    '  "raw_output": "Start: 2025-08-19T15:06:45+0000\\nHOST: test-host     '
+    '           Loss%   Snt   Last   Avg  Best  Wrst StDev\\n  1.|-- _gatewa'
+    'y                0.0%     3    1.2   1.1   0.9   1.3   0.2\\n  2.|-- 10'
+    '.0.0.1                0.0%     3    5.4   5.3   5.1   5.6   0.3\\n  3.|'
+    '-- 172.16.0.1              0.0%     3   10.1  10.2   9.8  10.5   0.4\\n'
+    '  4.|-- google.com              0.0%     3   15.3  15.4  15.1  15.7   '
+    '0.3"\n'
+    '}'
+)
+
 
 class TestConnectivityTools:
     """Test connectivity tools functionality."""
@@ -463,3 +571,30 @@ HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev"""
         assert hasattr(result[0], 'text')
         assert result[0].type == "text"
         assert isinstance(result[0].text, str)
+
+    def test_ping_success_response_bytes_unchanged(self, mock_execute_command,
+                                                   sample_ping_output):
+        """Byte-compat: exit-0 ping MCP response must stay byte-identical."""
+        mock_execute_command.return_value = sample_ping_output
+
+        result = self.connectivity_tools.ping_host("google.com")
+
+        assert result[0].text == EXPECTED_PING_SUCCESS_JSON
+
+    def test_traceroute_success_response_bytes_unchanged(self, mock_execute_command,
+                                                         sample_traceroute_output):
+        """Byte-compat: exit-0 traceroute MCP response must stay byte-identical."""
+        mock_execute_command.return_value = sample_traceroute_output
+
+        result = self.connectivity_tools.traceroute_path("google.com")
+
+        assert result[0].text == EXPECTED_TRACEROUTE_SUCCESS_JSON
+
+    def test_mtr_success_response_bytes_unchanged(self, mock_execute_command,
+                                                  sample_mtr_output):
+        """Byte-compat: exit-0 mtr MCP response must stay byte-identical."""
+        mock_execute_command.return_value = sample_mtr_output
+
+        result = self.connectivity_tools.mtr_monitor("google.com", count=3)
+
+        assert result[0].text == EXPECTED_MTR_SUCCESS_JSON

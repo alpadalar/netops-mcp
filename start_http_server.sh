@@ -8,7 +8,10 @@ set -e
 # Default values
 HOST=${HTTP_HOST:-"0.0.0.0"}
 PORT=${HTTP_PORT:-"8815"}
-PATH=${HTTP_PATH:-"/netops-mcp"}
+# NOTE: do NOT assign to $PATH here — that is the shell's executable search
+# path. Overwriting it with the MCP URL path breaks every external command
+# lookup (mkdir, cp, python) below. Use a dedicated variable instead.
+MCP_PATH=${HTTP_PATH:-"/netops-mcp"}
 CONFIG=${NETOPS_MCP_CONFIG:-"config/config.json"}
 
 # Colors for output
@@ -20,7 +23,7 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}🚀 Starting NetOps MCP HTTP Server${NC}"
 echo -e "${YELLOW}Host: ${HOST}${NC}"
 echo -e "${YELLOW}Port: ${PORT}${NC}"
-echo -e "${YELLOW}Path: ${PATH}${NC}"
+echo -e "${YELLOW}Path: ${MCP_PATH}${NC}"
 echo -e "${YELLOW}Config: ${CONFIG}${NC}"
 
 # Check if config file exists
@@ -47,12 +50,12 @@ fi
 export NETOPS_MCP_CONFIG="$CONFIG"
 export HTTP_HOST="$HOST"
 export HTTP_PORT="$PORT"
-export HTTP_PATH="$PATH"
+export HTTP_PATH="$MCP_PATH"
 
 # Start the server
 echo -e "${GREEN}✅ Starting server...${NC}"
 python -m netops_mcp.server_http \
     --host "$HOST" \
     --port "$PORT" \
-    --path "$PATH" \
+    --path "$MCP_PATH" \
     --config "$CONFIG"

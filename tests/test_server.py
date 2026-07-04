@@ -147,7 +147,7 @@ class TestNetOpsMCPServer:
         """
         from netops_mcp.server_http import NetOpsMCPHTTPServer
 
-        with patch('netops_mcp.server_http.check_required_tools',
+        with patch('netops_mcp.server_http.check_tools_status',
                    return_value=dict(FAKE_TOOL_STATUS)), \
              patch('netops_mcp.server_http.get_system_info',
                    return_value=dict(FAKE_SYSTEM_INFO)), \

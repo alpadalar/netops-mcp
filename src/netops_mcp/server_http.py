@@ -32,7 +32,7 @@ from .tools.network.discovery_tools import DiscoveryTools
 from .tools.system.network_tools import NetworkTools
 from .tools.system.monitoring_tools import MonitoringTools
 from .tools.security.scanning_tools import ScanningTools
-from .utils.system_check import check_required_tools, get_system_info
+from .utils.system_check import check_required_tools as check_tools_status, get_system_info
 from .middleware.auth import AuthenticationMiddleware
 from .middleware.rate_limiter import RateLimitMiddleware
 from .middleware.metrics import MetricsMiddleware, create_metrics_endpoint
@@ -206,13 +206,13 @@ class NetOpsMCPHTTPServer:
         @self.mcp.tool(description="Check required system tools")
         def check_required_tools():
             try:
-                tools = check_required_tools()
+                tools = check_tools_status()
                 system_info = get_system_info()
-                
+
                 response_data = {
                     "tools": tools,
                     "system_info": system_info,
-                    "missing_tools": [tool for tool, available in tools.items() if not available]
+                    "missing_tools": tools['missing_tools']
                 }
                 
                 return [{"type": "text", "text": json.dumps(response_data, indent=2)}]
@@ -242,7 +242,7 @@ class NetOpsMCPHTTPServer:
             ]
             
             # Count system tools
-            system_tools = check_required_tools()
+            system_tools = check_tools_status()
             available_system_tools = len(system_tools['available_tools'])
             total_system_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
             
@@ -288,7 +288,7 @@ class NetOpsMCPHTTPServer:
                 ]
                 
                 # Count system tools
-                system_tools = check_required_tools()
+                system_tools = check_tools_status()
                 available_system_tools = len(system_tools['available_tools'])
                 total_system_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
                 
@@ -350,7 +350,7 @@ class NetOpsMCPHTTPServer:
                 async def health_endpoint(request):
                     try:
                         # System tools kontrolü
-                        system_tools = check_required_tools()
+                        system_tools = check_tools_status()
                         available_tools = len(system_tools['available_tools'])
                         total_tools = len(system_tools['available_tools']) + len(system_tools['missing_tools'])
                         

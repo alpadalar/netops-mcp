@@ -872,7 +872,7 @@ pytest tests/ -v
 ### Testing Guidelines
 
 - Write tests for all new functionality
-- Maintain test coverage above 90%
+- Maintain test coverage at or above the enforced 80% threshold (CI fails under 80%)
 - Use meaningful test names and descriptions
 - Mock external dependencies
 

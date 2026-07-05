@@ -52,6 +52,19 @@ def _resolve(host: str, port: int) -> List[_IPAddress]:
         return [ipaddress.ip_address(str(info[4][0]).split("%")[0]) for info in infos]
 
 
+def _effective(ip: _IPAddress) -> _IPAddress:
+    """Unwrap an IPv4-mapped IPv6 address (``::ffff:127.0.0.1``) to its IPv4
+    body so it classifies by the real IPv4 address, not as a global IPv6 host."""
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        return ip.ipv4_mapped
+    return ip
+
+
+def _is_metadata(ip: _IPAddress) -> bool:
+    """True if ``ip`` (or its IPv4-mapped body) is a cloud metadata endpoint."""
+    return ip in _METADATA or _effective(ip) in _METADATA
+
+
 def _category(ip: _IPAddress) -> str:
     """Classify an IP into an SSRF-relevant category via a precedence ladder.
 
@@ -60,10 +73,7 @@ def _category(ip: _IPAddress) -> str:
     ``allow_private=True`` wrongly permit loopback. IPv4-mapped IPv6
     (``::ffff:127.0.0.1``) is unwrapped first so it classifies by its IPv4 body.
     """
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        eff: _IPAddress = ip.ipv4_mapped
-    else:
-        eff = ip
+    eff = _effective(ip)
     if eff.is_loopback:
         return "loopback"
     if eff.is_link_local:  # incl. 169.254.0.0/16 metadata range
@@ -77,6 +87,30 @@ def _category(ip: _IPAddress) -> str:
     return "global"
 
 
+def _apply_policy(host: str, ip: _IPAddress, policy: SecurityConfig) -> None:
+    """Enforce the SSRF category policy for one resolved/covered IP; raise on block.
+
+    ``block_metadata`` is an INDEPENDENT guard evaluated FIRST: a cloud-metadata
+    endpoint (IPv4 ``169.254.169.254`` or IPv6 ``fd00:ec2::254``) is blocked
+    whenever ``block_metadata`` is set, regardless of whether it ALSO classifies
+    as link-local. Previously the IPv4 IMDS classified as ``link_local`` before
+    the metadata rule was reached, so ``block_metadata=True`` gave NO independent
+    protection for the IPv4 IMDS once ``allow_link_local=True`` — the flag's
+    promise is now honored regardless of the link-local decision (WR-01).
+    """
+    if policy.block_metadata and _is_metadata(ip):
+        raise ValidationError(f"{host} -> {ip} is cloud metadata (blocked)")
+    category = _category(ip)
+    if category == "loopback" and not policy.allow_loopback:
+        raise ValidationError(f"{host} -> {ip} is loopback (blocked)")
+    if category == "link_local" and not policy.allow_link_local:
+        raise ValidationError(f"{host} -> {ip} is link-local (blocked)")
+    if category == "private" and not policy.allow_private:
+        raise ValidationError(f"{host} -> {ip} is private (blocked)")
+    if category == "reserved":
+        raise ValidationError(f"{host} -> {ip} is reserved (blocked)")
+
+
 def enforce_ssrf(host: str, policy: SecurityConfig, port: int = 80) -> List[_IPAddress]:
     """Resolve-then-classify a connection target; raise on a blocked category.
 
@@ -88,17 +122,7 @@ def enforce_ssrf(host: str, policy: SecurityConfig, port: int = 80) -> List[_IPA
     """
     ips = _resolve(host, port)
     for ip in ips:
-        category = _category(ip)
-        if category == "loopback" and not policy.allow_loopback:
-            raise ValidationError(f"{host} -> {ip} is loopback (blocked)")
-        if category == "link_local" and not policy.allow_link_local:
-            raise ValidationError(f"{host} -> {ip} is link-local (blocked)")
-        if category == "metadata" and policy.block_metadata:
-            raise ValidationError(f"{host} -> {ip} is cloud metadata (blocked)")
-        if category == "private" and not policy.allow_private:
-            raise ValidationError(f"{host} -> {ip} is private (blocked)")
-        if category == "reserved":
-            raise ValidationError(f"{host} -> {ip} is reserved (blocked)")
+        _apply_policy(host, ip, policy)
     return ips
 
 

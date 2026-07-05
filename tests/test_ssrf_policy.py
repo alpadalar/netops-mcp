@@ -76,3 +76,29 @@ def test_ssrf_does_not_overblock_lan(host):
     """allow_private=True (default) must NOT over-block RFC1918 LAN targets."""
     ips = enforce_ssrf(host, SecurityConfig())
     assert ips, "private LAN target must not be over-blocked"
+
+
+def test_block_metadata_guards_ipv4_imds_independently():
+    """WR-01: block_metadata must block the IPv4 IMDS endpoint even when
+    allow_link_local=True. Before the fix, 169.254.169.254 classified as
+    link_local and slipped past because the metadata rule was never reached."""
+    policy = SecurityConfig(allow_link_local=True, block_metadata=True)
+    with pytest.raises(ValidationError):
+        enforce_ssrf("169.254.169.254", policy)
+
+
+def test_block_metadata_guards_ipv4_mapped_imds():
+    """The IPv4-mapped IMDS (::ffff:169.254.169.254) is also caught by the
+    independent metadata guard when allow_link_local=True."""
+    policy = SecurityConfig(allow_link_local=True, block_metadata=True)
+    with pytest.raises(ValidationError):
+        enforce_ssrf("::ffff:169.254.169.254", policy)
+
+
+def test_metadata_allowed_when_link_local_allowed_and_not_blocked():
+    """Opt-out path: allow_link_local=True + block_metadata=False lets the IMDS
+    endpoint through (no independent metadata guard fires) — the flag semantics
+    are honored in both directions."""
+    policy = SecurityConfig(allow_link_local=True, block_metadata=False)
+    ips = enforce_ssrf("169.254.169.254", policy)
+    assert ips, "IMDS must be allowed when link-local is allowed and metadata not blocked"

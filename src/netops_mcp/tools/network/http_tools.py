@@ -3,7 +3,9 @@ HTTP/API testing tools for NetOps MCP.
 """
 
 import json
+import os
 import re
+import tempfile
 from typing import Dict, List, Optional, Any
 from mcp.types import TextContent as Content
 from ..base import NetOpsTool
@@ -50,9 +52,10 @@ class HTTPTools(NetOpsTool):
         valid_methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
         return method.upper() in valid_methods
 
-    def _format_curl_command(self, url: str, method: str = "GET", 
+    def _format_curl_command(self, url: str, method: str = "GET",
                            headers: Optional[Dict[str, str]] = None,
-                           data: Optional[str] = None, timeout: int = 30) -> List[str]:
+                           data: Optional[str] = None, timeout: int = 30,
+                           out_path: Optional[str] = None) -> List[str]:
         """Format curl command with parameters.
 
         Args:
@@ -61,24 +64,33 @@ class HTTPTools(NetOpsTool):
             headers: Optional HTTP headers
             data: Optional request body
             timeout: Request timeout
+            out_path: Per-request output file for the response body (SEC-02).
+                When provided, curl writes the body to this private tempfile via
+                ``-o`` instead of a shared /tmp path.
 
         Returns:
             List of command arguments
         """
-        command = ['curl', '-s', '-w', '@-', '-o', '/tmp/curl_output', '-X', method, url]
-        
+        command = ['curl', '-s', '-w', '@-']
+
+        # Route the response body to a per-request private file (SEC-02).
+        if out_path:
+            command.extend(['-o', out_path])
+
+        command.extend(['-X', method, url])
+
         # Add headers
         if headers:
             for key, value in headers.items():
                 command.extend(['-H', f'{key}: {value}'])
-        
+
         # Add data
         if data:
             command.extend(['-d', data])
-        
+
         # Add timeout
         command.extend(['--max-time', str(timeout)])
-        
+
         return command
 
     def _format_httpie_command(self, url: str, method: str = "GET",
@@ -142,45 +154,56 @@ class HTTPTools(NetOpsTool):
         try:
             if not self._validate_url(url):
                 raise ValueError("Invalid URL provided")
-            
+
             if not self._validate_method(method):
                 raise ValueError("Invalid HTTP method provided")
 
-            command = self._format_curl_command(url, method, headers, data, timeout)
-            
-            # Execute curl with format
-            result = self._execute_command(command, timeout + 5)
-            
-            if result["success"]:
-                # Read output file
+            # Per-request private output file (0600) — no shared /tmp path (SEC-02).
+            fd, out_path = tempfile.mkstemp(prefix="netops_curl_", suffix=".out")
+            os.close(fd)
+            try:
+                command = self._format_curl_command(
+                    url, method, headers, data, timeout, out_path
+                )
+
+                # Execute curl with format
+                result = self._execute_command(command, timeout + 5)
+
+                if result["success"]:
+                    # Read this request's private output file
+                    try:
+                        with open(out_path, 'r') as f:
+                            response_body = f.read()
+                    except FileNotFoundError:
+                        response_body = ""
+
+                    # Parse curl stats
+                    stats = self._parse_curl_output(result["stdout"])
+
+                    response_data = {
+                        "url": url,
+                        "method": method,
+                        "success": True,
+                        "stats": stats,
+                        "response_body": response_body,
+                        "stderr": result["stderr"]
+                    }
+                else:
+                    response_data = {
+                        "url": url,
+                        "method": method,
+                        "success": False,
+                        "error": result["stderr"],
+                        "return_code": result["return_code"]
+                    }
+
+                return self._format_response(response_data, "curl_request")
+            finally:
                 try:
-                    with open('/tmp/curl_output', 'r') as f:
-                        response_body = f.read()
-                except FileNotFoundError:
-                    response_body = ""
-                
-                # Parse curl stats
-                stats = self._parse_curl_output(result["stdout"])
-                
-                response_data = {
-                    "url": url,
-                    "method": method,
-                    "success": True,
-                    "stats": stats,
-                    "response_body": response_body,
-                    "stderr": result["stderr"]
-                }
-            else:
-                response_data = {
-                    "url": url,
-                    "method": method,
-                    "success": False,
-                    "error": result["stderr"],
-                    "return_code": result["return_code"]
-                }
-            
-            return self._format_response(response_data, "curl_request")
-            
+                    os.unlink(out_path)
+                except OSError:
+                    pass
+
         except Exception as e:
             return self._handle_error("curl request", e)
 
@@ -240,57 +263,67 @@ class HTTPTools(NetOpsTool):
         try:
             if not self._validate_url(url):
                 raise ValueError("Invalid URL provided")
-            
+
             if not self._validate_method(method):
                 raise ValueError("Invalid HTTP method provided")
 
-            # Use curl for API testing with proper output handling
-            command = ['curl', '-s', '-w', '%{http_code}', '-o', '/tmp/api_response', '-X', method, url]
-            
-            # Add headers
-            if headers:
-                for key, value in headers.items():
-                    command.extend(['-H', f'{key}: {value}'])
-            
-            # Add timeout
-            command.extend(['--max-time', str(timeout)])
-            
-            result = self._execute_command(command, timeout + 5)
-            
-            if result["success"]:
-                # Read response body
+            # Per-request private output file (0600) — no shared /tmp path (SEC-02).
+            fd, out_path = tempfile.mkstemp(prefix="netops_api_", suffix=".out")
+            os.close(fd)
+            try:
+                # Use curl for API testing with proper output handling
+                command = ['curl', '-s', '-w', '%{http_code}', '-o', out_path,
+                           '-X', method, url]
+
+                # Add headers
+                if headers:
+                    for key, value in headers.items():
+                        command.extend(['-H', f'{key}: {value}'])
+
+                # Add timeout
+                command.extend(['--max-time', str(timeout)])
+
+                result = self._execute_command(command, timeout + 5)
+
+                if result["success"]:
+                    # Read this request's private output file
+                    try:
+                        with open(out_path, 'r') as f:
+                            response_body = f.read()
+                    except FileNotFoundError:
+                        response_body = ""
+
+                    # Parse status code
+                    try:
+                        status_code = int(result["stdout"])
+                    except ValueError:
+                        status_code = 0
+
+                    test_result = {
+                        "url": url,
+                        "method": method,
+                        "expected_status": expected_status,
+                        "actual_status": status_code,
+                        "success": status_code == expected_status,
+                        "response_body": response_body,
+                        "test_passed": status_code == expected_status
+                    }
+                else:
+                    test_result = {
+                        "url": url,
+                        "method": method,
+                        "expected_status": expected_status,
+                        "success": False,
+                        "error": result["stderr"],
+                        "test_passed": False
+                    }
+
+                return self._format_response(test_result, "api_test")
+            finally:
                 try:
-                    with open('/tmp/api_response', 'r') as f:
-                        response_body = f.read()
-                except FileNotFoundError:
-                    response_body = ""
-                
-                # Parse status code
-                try:
-                    status_code = int(result["stdout"])
-                except ValueError:
-                    status_code = 0
-                
-                test_result = {
-                    "url": url,
-                    "method": method,
-                    "expected_status": expected_status,
-                    "actual_status": status_code,
-                    "success": status_code == expected_status,
-                    "response_body": response_body,
-                    "test_passed": status_code == expected_status
-                }
-            else:
-                test_result = {
-                    "url": url,
-                    "method": method,
-                    "expected_status": expected_status,
-                    "success": False,
-                    "error": result["stderr"],
-                    "test_passed": False
-                }
-            
-            return self._format_response(test_result, "api_test")
-            
+                    os.unlink(out_path)
+                except OSError:
+                    pass
+
         except Exception as e:
             return self._handle_error("API test", e)

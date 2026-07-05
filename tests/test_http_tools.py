@@ -2,14 +2,16 @@
 Comprehensive tests for HTTP tools functionality.
 """
 
-import pytest
-import json
+import inspect
 import os
 import stat
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
+import netops_mcp.tools.network.http_tools as http_tools_module
+import pytest
 from netops_mcp.tools.network.http_tools import HTTPTools
 
 
@@ -451,10 +453,7 @@ class TestHTTPTools:
 
     def test_no_shared_tmp_paths_in_source(self):
         """The hardcoded shared /tmp curl output paths must be gone (SEC-02)."""
-        import inspect
-        import netops_mcp.tools.network.http_tools as mod
-
-        source = inspect.getsource(mod)
+        source = inspect.getsource(http_tools_module)
         # Strip comment lines before scanning for the shared literals.
         code = "\n".join(
             line for line in source.splitlines() if not line.lstrip().startswith("#")
@@ -470,8 +469,10 @@ class TestHTTPTools:
         def fake_exec(command, timeout=0):
             out_path = command[command.index("-o") + 1]
             url = _find_url(command)
+            # Bracket the marker so one url is never a substring of another
+            # (e.g. req-1 vs req-10).
             with open(out_path, "w") as fh:
-                fh.write(f"BODY-FOR::{url}")
+                fh.write(f"[BODY-FOR::{url}]")
             # Widen the race window so a shared path deterministically clobbers.
             time.sleep(0.02)
             return {
@@ -491,10 +492,10 @@ class TestHTTPTools:
             results = list(executor.map(run, urls))
 
         for url, text in results:
-            assert f"BODY-FOR::{url}" in text, f"missing own body for {url}"
+            assert f"[BODY-FOR::{url}]" in text, f"missing own body for {url}"
             for other in urls:
                 if other != url:
-                    assert f"BODY-FOR::{other}" not in text, (
+                    assert f"[BODY-FOR::{other}]" not in text, (
                         f"cross-contamination: {other} leaked into {url}"
                     )
 
@@ -505,8 +506,9 @@ class TestHTTPTools:
         def fake_exec(command, timeout=0):
             out_path = command[command.index("-o") + 1]
             url = _find_url(command)
+            # Bracket the marker so one url is never a substring of another.
             with open(out_path, "w") as fh:
-                fh.write(f"BODY-FOR::{url}")
+                fh.write(f"[BODY-FOR::{url}]")
             time.sleep(0.02)
             return {
                 "success": True,
@@ -525,9 +527,9 @@ class TestHTTPTools:
             results = list(executor.map(run, urls))
 
         for url, text in results:
-            assert f"BODY-FOR::{url}" in text, f"missing own body for {url}"
+            assert f"[BODY-FOR::{url}]" in text, f"missing own body for {url}"
             for other in urls:
                 if other != url:
-                    assert f"BODY-FOR::{other}" not in text, (
+                    assert f"[BODY-FOR::{other}]" not in text, (
                         f"cross-contamination: {other} leaked into {url}"
                     )

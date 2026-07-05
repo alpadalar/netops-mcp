@@ -230,3 +230,7 @@ the test mocking strategy, and PR guidelines. By participating you agree to the
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/alpadalar-netops-mcp).

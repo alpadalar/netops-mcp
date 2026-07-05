@@ -146,15 +146,27 @@ check_pattern "Google API key (AIza...)"     'AIza[0-9A-Za-z_-]{35}'
 BEARER_DETECT='^\+.*Bearer [A-Za-z0-9_.-]{20,}'
 BEARER_PLACEHOLDER='Bearer (YOUR|EXAMPLE|XXXX|PLACEHOLDER|CHANGEME|<|\.\.\.)'
 section "Real bearer tokens (added lines, excluding placeholders)"
-bearer_hits=$(printf '%s\n' "$DIFF_ALL" \
-    | grep -iE "$BEARER_DETECT" 2>/dev/null \
-    | grep -viE "$BEARER_PLACEHOLDER" 2>/dev/null \
-    | wc -l | tr -d ' ')
+# Fail closed (WR-01): capture the PRIMARY detect-grep exit code. grep rc >=2 is
+# a real error (bad regex / read/encoding failure); an un-runnable secret check
+# must abort the gate, never silently report 0. The old
+# `... | grep -iE "$BEARER_DETECT" 2>/dev/null | ... | wc -l` swallowed the error
+# and printed "ok: 0" — a fail-OPEN window this stage no longer has. rc 0 (match)
+# and rc 1 (no match) are both normal and proceed.
+bearer_detected=$(printf '%s\n' "$DIFF_ALL" | grep -iE "$BEARER_DETECT"); rc=$?
+if [ "$rc" -ge 2 ]; then
+    printf 'FATAL: bearer-token detect grep error — failing closed\n' >&2
+    exit 2
+fi
+if [ "$rc" -eq 0 ]; then
+    # Exclude documented placeholders (per-token anchored, WR-02) and count.
+    bearer_hits=$(printf '%s\n' "$bearer_detected" | grep -viE "$BEARER_PLACEHOLDER" | wc -l | tr -d ' ')
+else
+    bearer_hits=0
+fi
 bearer_hits=${bearer_hits:-0}
 if [ "$bearer_hits" -ne 0 ]; then
     printf 'FINDING: real bearer token(s): %s\n' "$bearer_hits"
-    printf '%s\n' "$DIFF_ALL" | grep -iE "$BEARER_DETECT" \
-        | grep -viE "$BEARER_PLACEHOLDER" | head -10
+    printf '%s\n' "$bearer_detected" | grep -viE "$BEARER_PLACEHOLDER" | head -10
     FINDINGS=$((FINDINGS + 1))
 else
     printf 'ok: real bearer tokens 0\n'
@@ -177,14 +189,23 @@ section "High-entropy sha256 triage (allowlist: uv.lock hashes + README example)
 # url+hash position is still trusted — the same public-lockfile assumption the
 # .gitleaks.toml `^uv\.lock$` path allowlist already makes.
 UVLOCK_HASH_STRUCT='url = "https://files\.pythonhosted\.org/[^"]*", hash = "sha256:[a-f0-9]{16,}"'
-UNEXPECTED_SHA_LIST=$(printf '%s\n' "$DIFF_ALL" \
-    | grep -iE 'sha256:[a-f0-9]{16,}' 2>/dev/null \
+# Fail closed (WR-01): gate the FIRST-STAGE sha256 grep before neutralization.
+# The old `grep -iE 'sha256:...' 2>/dev/null | ...` swallowed a grep error, which
+# would have emptied the candidate stream and made the triage report every hash
+# "allowlisted" (fail-OPEN) — the highest-value allowlist stage. rc >=2 aborts;
+# rc 0/1 are normal. Downstream filters run on the already-extracted tokens.
+SHA_CANDIDATES=$(printf '%s\n' "$DIFF_ALL" | grep -iE 'sha256:[a-f0-9]{16,}'); rc=$?
+if [ "$rc" -ge 2 ]; then
+    printf 'FATAL: sha256 triage detect grep error — failing closed\n' >&2
+    exit 2
+fi
+UNEXPECTED_SHA_LIST=$(printf '%s\n' "$SHA_CANDIDATES" \
     | sed -E "s#${UVLOCK_HASH_STRUCT}#UVLOCK_PKG_HASH#g" \
-    | grep -oiE 'sha256:[a-f0-9]{16,}' 2>/dev/null \
-    | grep -viF "$README_EXAMPLE_DIGEST" 2>/dev/null)
+    | grep -oiE 'sha256:[a-f0-9]{16,}' \
+    | grep -viF "$README_EXAMPLE_DIGEST")
 UNEXPECTED_SHA=$(printf '%s' "$UNEXPECTED_SHA_LIST" | grep -c . )
 UNEXPECTED_SHA=${UNEXPECTED_SHA:-0}
-TOTAL_SHA=$(printf '%s\n' "$DIFF_ALL" | grep -oiE 'sha256:[a-f0-9]{16,}' 2>/dev/null | grep -c .)
+TOTAL_SHA=$(printf '%s\n' "$SHA_CANDIDATES" | grep -oiE 'sha256:[a-f0-9]{16,}' | grep -c .)
 TOTAL_SHA=${TOTAL_SHA:-0}
 if [ "$UNEXPECTED_SHA" -ne 0 ]; then
     printf 'FINDING: %s sha256 token(s) outside the uv.lock/README allowlist:\n' "$UNEXPECTED_SHA"

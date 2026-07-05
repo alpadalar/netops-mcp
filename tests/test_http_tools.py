@@ -4,8 +4,21 @@ Comprehensive tests for HTTP tools functionality.
 
 import pytest
 import json
+import os
+import stat
+import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch, MagicMock
 from netops_mcp.tools.network.http_tools import HTTPTools
+
+
+def _find_url(command):
+    """Locate the request URL inside a built curl/api argv."""
+    return next(
+        arg for arg in command
+        if isinstance(arg, str) and arg.startswith(("http://", "https://"))
+    )
 
 
 class TestHTTPTools:
@@ -372,7 +385,149 @@ class TestHTTPTools:
         }
         
         result = self.http_tools.curl_request("https://example.com", timeout=5)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "timeout" in result[0].text.lower() or "error" in result[0].text.lower()
+
+    # ------------------------------------------------------------------
+    # SEC-02 / TEST-03: per-request tempfile + concurrency isolation
+    # ------------------------------------------------------------------
+
+    def test_curl_request_tempfile_mode_0600_and_cleanup(self, mock_execute_command):
+        """curl_request writes to a per-request 0600 tempfile, reads it back,
+        and unlinks it in finally (no shared /tmp/curl_output)."""
+        captured = {}
+
+        def fake_exec(command, timeout=0):
+            out_path = command[command.index("-o") + 1]
+            captured["path"] = out_path
+            captured["mode"] = stat.S_IMODE(os.stat(out_path).st_mode)
+            with open(out_path, "w") as fh:
+                fh.write("body-data-marker")
+            return {
+                "success": True,
+                "stdout": '{"http_code": "200"}',
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        mock_execute_command.side_effect = fake_exec
+
+        result = self.http_tools.curl_request("https://example.com")
+
+        assert captured["mode"] == 0o600
+        assert "body-data-marker" in result[0].text
+        # finally cleanup: the private tempfile must be gone after the call
+        assert not os.path.exists(captured["path"])
+
+    def test_curl_request_tempfile_cleanup_on_failure(self, mock_execute_command):
+        """The per-request mkstemp tempfile is unlinked even when the command
+        reports failure (finally cleanup on the error branch)."""
+        created = []
+        real_mkstemp = tempfile.mkstemp
+
+        def spy_mkstemp(*args, **kwargs):
+            fd, path = real_mkstemp(*args, **kwargs)
+            created.append(path)
+            return fd, path
+
+        mock_execute_command.return_value = {
+            "success": False,
+            "stdout": "",
+            "stderr": "boom",
+            "return_code": 1,
+        }
+
+        with patch(
+            "netops_mcp.tools.network.http_tools.tempfile.mkstemp",
+            side_effect=spy_mkstemp,
+        ):
+            self.http_tools.curl_request("https://example.com")
+
+        assert created, "curl_request must create a per-request tempfile via mkstemp"
+        for path in created:
+            assert not os.path.exists(path)
+
+    def test_no_shared_tmp_paths_in_source(self):
+        """The hardcoded shared /tmp curl output paths must be gone (SEC-02)."""
+        import inspect
+        import netops_mcp.tools.network.http_tools as mod
+
+        source = inspect.getsource(mod)
+        # Strip comment lines before scanning for the shared literals.
+        code = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "/tmp/curl_output" not in code
+        assert "/tmp/api_response" not in code
+
+    def test_curl_request_concurrent_no_cross_contamination(self, mock_execute_command):
+        """N concurrent curl_request calls each read back only their own body.
+        A shared output path would cross-contaminate under the race window."""
+        urls = [f"https://example.com/req-{i}" for i in range(12)]
+
+        def fake_exec(command, timeout=0):
+            out_path = command[command.index("-o") + 1]
+            url = _find_url(command)
+            with open(out_path, "w") as fh:
+                fh.write(f"BODY-FOR::{url}")
+            # Widen the race window so a shared path deterministically clobbers.
+            time.sleep(0.02)
+            return {
+                "success": True,
+                "stdout": '{"http_code": "200"}',
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        mock_execute_command.side_effect = fake_exec
+
+        def run(u):
+            res = self.http_tools.curl_request(u)
+            return u, res[0].text
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = list(executor.map(run, urls))
+
+        for url, text in results:
+            assert f"BODY-FOR::{url}" in text, f"missing own body for {url}"
+            for other in urls:
+                if other != url:
+                    assert f"BODY-FOR::{other}" not in text, (
+                        f"cross-contamination: {other} leaked into {url}"
+                    )
+
+    def test_api_test_concurrent_no_cross_contamination(self, mock_execute_command):
+        """N concurrent api_test calls each read back only their own body."""
+        urls = [f"https://example.com/api-{i}" for i in range(12)]
+
+        def fake_exec(command, timeout=0):
+            out_path = command[command.index("-o") + 1]
+            url = _find_url(command)
+            with open(out_path, "w") as fh:
+                fh.write(f"BODY-FOR::{url}")
+            time.sleep(0.02)
+            return {
+                "success": True,
+                "stdout": "200",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        mock_execute_command.side_effect = fake_exec
+
+        def run(u):
+            res = self.http_tools.api_test(u)
+            return u, res[0].text
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = list(executor.map(run, urls))
+
+        for url, text in results:
+            assert f"BODY-FOR::{url}" in text, f"missing own body for {url}"
+            for other in urls:
+                if other != url:
+                    assert f"BODY-FOR::{other}" not in text, (
+                        f"cross-contamination: {other} leaked into {url}"
+                    )

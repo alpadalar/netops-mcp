@@ -155,13 +155,64 @@ class TestScanningTools:
             assert self.scanning_tools._validate_host(host) == False
 
     @pytest.mark.parametrize("valid_ports,invalid_ports", [
-        (["80", "443", "22,80,443", "1-100", "80-443"], 
+        (["80", "443", "22,80,443", "1-100", "80-443", "1-1000"],
          ["", None, "invalid_ports", "abc", "999999", "0", "65536"]),
     ])
     def test_validate_ports(self, valid_ports, invalid_ports):
-        """Test ports validation."""
+        """Test ports validation (REF-02: delegates to central validate_port_range)."""
         for ports in valid_ports:
             assert self.scanning_tools._validate_ports(ports) == True
-        
+
         for ports in invalid_ports:
             assert self.scanning_tools._validate_ports(ports) == False
+
+    def test_port_scan_loopback_target_blocked(self):
+        """SEC-03: a loopback target is SSRF-blocked before any scan runs."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            result = self.scanning_tools.port_scan("127.0.0.1", "80")
+
+            assert len(result) > 0
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    def test_service_enumeration_loopback_target_blocked(self):
+        """SEC-03: service_enumeration blocks a loopback target."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            result = self.scanning_tools.service_enumeration("127.0.0.1")
+
+            assert len(result) > 0
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    def test_port_scan_global_target_proceeds(self):
+        """SEC-03: a global IP target passes the SSRF classifier and proceeds."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Port scan results",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = self.scanning_tools.port_scan("8.8.8.8", "22,80,443")
+
+            assert "Port scan" in result[0].text
+            mock_execute.assert_called_once()
+
+    def test_port_scan_and_enum_not_privileged_gated(self):
+        """port_scan (-sT) and service_enumeration (-sV -sC) are connect scans
+        and must NEVER be privileged-gated, even under the default config."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "results",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            r1 = self.scanning_tools.port_scan("8.8.8.8", "80")
+            r2 = self.scanning_tools.service_enumeration("8.8.8.8")
+
+            assert "disabled by config" not in r1[0].text.lower()
+            assert "disabled by config" not in r2[0].text.lower()
+            assert mock_execute.call_count == 2

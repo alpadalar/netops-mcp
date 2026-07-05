@@ -4,6 +4,7 @@ Tests for DiscoveryTools.
 
 import pytest
 from unittest.mock import patch, MagicMock
+from netops_mcp.config.models import Config, SecurityConfig
 from netops_mcp.tools.network.discovery_tools import DiscoveryTools
 
 
@@ -20,9 +21,12 @@ class TestDiscoveryTools:
         assert isinstance(self.discovery_tools, DiscoveryTools)
 
     @pytest.mark.parametrize("host,scan_type,expected_success", [
+        # basic (-sT) is an ungated connect scan; global/private IP targets
+        # pass the SSRF classifier. The privileged quick/full cases moved to
+        # dedicated gate tests below (they fire before _execute_command).
         ("google.com", "basic", True),
-        ("8.8.8.8", "quick", True),
-        ("192.168.1.1", "full", True),
+        ("8.8.8.8", "basic", True),
+        ("192.168.1.1", "basic", True),
         ("", "basic", False),
         (None, "basic", False),
     ])
@@ -35,16 +39,114 @@ class TestDiscoveryTools:
                 "stderr": "",
                 "return_code": 0 if expected_success else 1
             }
-            
+
             result = self.discovery_tools.nmap_scan(host, scan_type=scan_type)
-            
+
             assert len(result) > 0
             assert result[0].type == "text"
-            
+
             if expected_success:
                 assert "Nmap scan report" in result[0].text
             else:
                 assert "error" in result[0].text.lower()
+
+    @pytest.mark.parametrize("scan_type", ["quick", "full"])
+    def test_nmap_scan_privileged_gated_by_default(self, scan_type):
+        """SEC-05: quick (-sS) / full (-sS -O) are denied when
+        allow_privileged_commands is False (the default), and the denial
+        fires BEFORE _execute_command is ever reached."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.nmap_scan("8.8.8.8", scan_type=scan_type)
+
+            assert len(result) > 0
+            assert result[0].type == "text"
+            assert "disabled by config" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    @pytest.mark.parametrize("scan_type", ["quick", "full"])
+    def test_nmap_scan_privileged_allowed_when_flag_true(self, scan_type):
+        """SEC-05: with allow_privileged_commands=True the privileged scan
+        types proceed to _execute_command."""
+        privileged_tools = DiscoveryTools(
+            Config(security=SecurityConfig(allow_privileged_commands=True))
+        )
+        with patch.object(privileged_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Nmap scan report for test-host",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = privileged_tools.nmap_scan("8.8.8.8", scan_type=scan_type)
+
+            assert "Nmap scan report" in result[0].text
+            assert "disabled by config" not in result[0].text.lower()
+            mock_execute.assert_called_once()
+
+    def test_nmap_scan_basic_not_privileged_gated(self):
+        """The basic (-sT) connect scan is never privileged-gated, even with
+        the default (privileged-off) config."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Nmap scan report for test-host",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = self.discovery_tools.nmap_scan("8.8.8.8", scan_type="basic")
+
+            assert "disabled by config" not in result[0].text.lower()
+            mock_execute.assert_called_once()
+
+    def test_service_discovery_not_privileged_gated(self):
+        """service_discovery (-sV -sC connect scan) is never privileged-gated."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Service discovery results",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = self.discovery_tools.service_discovery("8.8.8.8")
+
+            assert "disabled by config" not in result[0].text.lower()
+            mock_execute.assert_called_once()
+
+    def test_nmap_scan_loopback_target_blocked(self):
+        """SEC-03: a loopback target is SSRF-blocked before any scan runs."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.nmap_scan("127.0.0.1", scan_type="basic")
+
+            assert len(result) > 0
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    def test_service_discovery_loopback_target_blocked(self):
+        """SEC-03: service_discovery blocks a loopback target."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.service_discovery("127.0.0.1")
+
+            assert len(result) > 0
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    def test_nmap_scan_global_target_proceeds(self):
+        """SEC-03: a global IP target passes the SSRF classifier and proceeds."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Nmap scan report for test-host",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = self.discovery_tools.nmap_scan("8.8.8.8", scan_type="basic")
+
+            assert "Nmap scan report" in result[0].text
+            mock_execute.assert_called_once()
 
     @pytest.mark.parametrize("host,scan_type", [
         ("google.com", "invalid_scan_type"),

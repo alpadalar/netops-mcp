@@ -173,3 +173,33 @@ def test_scan_target_rejects_malformed(target):
     """Empty / malformed / out-of-range scan targets raise ValidationError."""
     with pytest.raises(ValidationError):
         enforce_ssrf_scan_target(target, SecurityConfig())
+
+
+# ---------------------------------------------------------------------------
+# WR-01: the >4096-address octet-range bounding-box FALLBACK
+# (input_validator.py:270-278) is the load-bearing defense for large nmap
+# octet ranges — the exact class the CR-01 bypass exploited — but every prior
+# test stayed under the 4096 cap and took the exact-enumerate path, leaving the
+# fallback (compute first/last, summarize_address_range, per-summary overlap
+# check) with ZERO coverage. These cases force ranges >4096 so a future
+# refactor that inverts the overlap sense or mis-computes min/max octets fails
+# loudly instead of silently re-opening the bypass.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("target", [
+    "1-255.1-255.0.1",        # 65025 addrs; bounding box straddles 127.0.0.0/8
+    "120,200.0-255.0-255.1",  # 131072 addrs; non-contiguous comma straddles loopback
+])
+def test_scan_target_large_octet_range_fallback_blocks(target):
+    """A >4096-address octet range whose bounding box overlaps a blocked
+    network (loopback/link-local/metadata) is blocked via the summarize-range
+    overlap fallback, not the exact-enumerate path."""
+    with pytest.raises(ValidationError):
+        enforce_ssrf_scan_target(target, SecurityConfig())
+
+
+def test_scan_target_large_octet_range_fallback_allows_global():
+    """A >4096-address octet range that is entirely global must NOT be
+    over-blocked by the fallback (guards against an inverted overlap sense)."""
+    # 1-9.1-9.1-9.0-255 == 186624 addresses, bounding box [1.1.1.0, 9.9.9.255],
+    # all global — no overlap with any blocked network.
+    enforce_ssrf_scan_target("1-9.1-9.1-9.0-255", SecurityConfig())  # must not raise

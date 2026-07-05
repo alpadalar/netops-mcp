@@ -4,9 +4,9 @@ HTTP/API testing tools for NetOps MCP.
 
 import json
 import os
-import re
 import tempfile
 from typing import Dict, List, Optional, Any
+from urllib.parse import urlsplit
 from mcp.types import TextContent as Content
 from ..base import NetOpsTool
 
@@ -15,7 +15,12 @@ class HTTPTools(NetOpsTool):
     """Tools for HTTP/API testing and diagnostics."""
 
     def _validate_url(self, url: str) -> bool:
-        """Validate URL format.
+        """Validate URL FORMAT by delegating to the central validator (REF-02).
+
+        Keeps the historical ``-> bool`` contract: True for a well-formed
+        http/https URL, False otherwise (bool-equivalent to the old regex across
+        the corpus). This is format-only — SSRF policy (loopback/link-local/
+        metadata) is enforced separately by ``_enforce_ssrf_url``.
 
         Args:
             url: URL to validate
@@ -23,19 +28,13 @@ class HTTPTools(NetOpsTool):
         Returns:
             True if URL is valid
         """
-        if not url or not isinstance(url, str):
+        from ...validators.input_validator import ValidationError, validate_url
+
+        try:
+            validate_url(url)
+            return True
+        except ValidationError:
             return False
-        
-        # Basic URL validation regex
-        url_pattern = re.compile(
-            r'^https?://'  # http:// or https://
-            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+[A-Z]{2,6}\.?|'  # domain...
-            r'localhost|'  # localhost...
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'  # ...or ip
-            r'(?::\d+)?'  # optional port
-            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-        
-        return bool(url_pattern.match(url))
 
     def _validate_method(self, method: str) -> bool:
         """Validate HTTP method.
@@ -52,10 +51,37 @@ class HTTPTools(NetOpsTool):
         valid_methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
         return method.upper() in valid_methods
 
+    def _curl_resolve_args(self, url: str,
+                           resolved_ips: Optional[List[str]]) -> List[str]:
+        """Build the curl ``--resolve`` pin args for the classified IP(s) (SEC-03).
+
+        Pins curl to the already-classified IP so it cannot re-resolve the host
+        at request time (defeats DNS-rebind, T-4-03). The port is derived from
+        the URL via ``urlsplit`` — explicit port if present, else 443 for https
+        and 80 for http (Pitfall 7). Returns ``[]`` when there is nothing to pin.
+
+        Args:
+            url: Target URL (port/host source)
+            resolved_ips: IPs returned by ``_enforce_ssrf_url``
+
+        Returns:
+            ``['--resolve', 'host:port:ip1,ip2']`` or ``[]``
+        """
+        if not resolved_ips:
+            return []
+        parts = urlsplit(url)
+        host = parts.hostname
+        if not host:
+            return []
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        addrs = ",".join(str(ip) for ip in resolved_ips)
+        return ["--resolve", f"{host}:{port}:{addrs}"]
+
     def _format_curl_command(self, url: str, method: str = "GET",
                            headers: Optional[Dict[str, str]] = None,
                            data: Optional[str] = None, timeout: int = 30,
-                           out_path: Optional[str] = None) -> List[str]:
+                           out_path: Optional[str] = None,
+                           resolved_ips: Optional[List[str]] = None) -> List[str]:
         """Format curl command with parameters.
 
         Args:
@@ -67,6 +93,7 @@ class HTTPTools(NetOpsTool):
             out_path: Per-request output file for the response body (SEC-02).
                 When provided, curl writes the body to this private tempfile via
                 ``-o`` instead of a shared /tmp path.
+            resolved_ips: Classified IP(s) to pin via ``--resolve`` (SEC-03).
 
         Returns:
             List of command arguments
@@ -77,7 +104,15 @@ class HTTPTools(NetOpsTool):
         if out_path:
             command.extend(['-o', out_path])
 
-        command.extend(['-X', method, url])
+        # Never follow redirects — closes redirect-to-metadata (SEC-03, T-4-04).
+        command.extend(['--max-redirs', '0'])
+
+        command.extend(['-X', method])
+
+        # Pin curl to the classified IP so it cannot re-resolve (SEC-03, T-4-03).
+        command.extend(self._curl_resolve_args(url, resolved_ips))
+
+        command.append(url)
 
         # Add headers
         if headers:
@@ -158,12 +193,18 @@ class HTTPTools(NetOpsTool):
             if not self._validate_method(method):
                 raise ValueError("Invalid HTTP method provided")
 
+            # Resolve-then-classify (fail-CLOSED) and pin curl to the classified
+            # IP; blocks loopback/link-local/metadata and defeats DNS-rebind
+            # (SEC-03). A blocked/unresolvable host raises before any tempfile is
+            # created, so the except envelope reports it cleanly.
+            resolved_ips = self._enforce_ssrf_url(url)
+
             # Per-request private output file (0600) — no shared /tmp path (SEC-02).
             fd, out_path = tempfile.mkstemp(prefix="netops_curl_", suffix=".out")
             os.close(fd)
             try:
                 command = self._format_curl_command(
-                    url, method, headers, data, timeout, out_path
+                    url, method, headers, data, timeout, out_path, resolved_ips
                 )
 
                 # Execute curl with format
@@ -224,12 +265,19 @@ class HTTPTools(NetOpsTool):
         try:
             if not self._validate_url(url):
                 raise ValueError("Invalid URL provided")
-            
+
             if not self._validate_method(method):
                 raise ValueError("Invalid HTTP method provided")
 
+            # SSRF-classify the host before running httpie (fail-CLOSED): blocks
+            # loopback/link-local/metadata by policy. CAVEAT (Open Q2): httpie
+            # has no curl-style --resolve, so its DNS is NOT pinned — a small
+            # residual rebind window remains between classification and fetch.
+            # curl_request is the fully-pinned path; see SECURITY.md (REL-06).
+            self._enforce_ssrf_url(url)
+
             command = self._format_httpie_command(url, method, headers, data, timeout)
-            
+
             result = self._execute_command(command, timeout + 5)
             
             response_data = {
@@ -267,13 +315,22 @@ class HTTPTools(NetOpsTool):
             if not self._validate_method(method):
                 raise ValueError("Invalid HTTP method provided")
 
+            # Resolve-then-classify (fail-CLOSED) and pin curl to the classified
+            # IP; blocks loopback/link-local/metadata and defeats DNS-rebind
+            # (SEC-03). Raises before any tempfile is created on a blocked host.
+            resolved_ips = self._enforce_ssrf_url(url)
+
             # Per-request private output file (0600) — no shared /tmp path (SEC-02).
             fd, out_path = tempfile.mkstemp(prefix="netops_api_", suffix=".out")
             os.close(fd)
             try:
-                # Use curl for API testing with proper output handling
+                # Use curl for API testing with proper output handling.
+                # --max-redirs 0 (no -L) closes redirect-to-metadata;
+                # --resolve pins the classified IP against DNS-rebind (SEC-03).
                 command = ['curl', '-s', '-w', '%{http_code}', '-o', out_path,
-                           '-X', method, url]
+                           '--max-redirs', '0', '-X', method]
+                command.extend(self._curl_resolve_args(url, resolved_ips))
+                command.append(url)
 
                 # Add headers
                 if headers:

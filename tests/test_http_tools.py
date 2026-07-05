@@ -533,3 +533,108 @@ class TestHTTPTools:
                     assert f"[BODY-FOR::{other}]" not in text, (
                         f"cross-contamination: {other} leaked into {url}"
                     )
+
+    # ------------------------------------------------------------------
+    # SEC-03 / TEST-04: curl IP-pin + redirect-off (redirect-to-metadata)
+    # ------------------------------------------------------------------
+
+    def test_curl_command_pins_ip_and_disables_redirects(self):
+        """Built curl argv pins the classified IP via --resolve (port 443 for
+        https), sets --max-redirs 0, and never adds -L (TEST-04)."""
+        command = self.http_tools._format_curl_command(
+            "https://example.com/path",
+            "GET",
+            out_path="/tmp/ignored",
+            resolved_ips=["93.184.216.34"],
+        )
+        assert "--resolve" in command
+        assert command[command.index("--resolve") + 1] == "example.com:443:93.184.216.34"
+        assert "--max-redirs" in command
+        assert command[command.index("--max-redirs") + 1] == "0"
+        assert "-L" not in command
+
+    def test_curl_command_http_scheme_pins_port_80(self):
+        """http:// URLs pin port 80 in --resolve (Pitfall 7)."""
+        command = self.http_tools._format_curl_command(
+            "http://example.com/x",
+            "GET",
+            out_path="/tmp/ignored",
+            resolved_ips=["93.184.216.34"],
+        )
+        assert command[command.index("--resolve") + 1] == "example.com:80:93.184.216.34"
+
+    def test_curl_command_explicit_port_pins_that_port(self):
+        """An explicit URL port is used verbatim in --resolve."""
+        command = self.http_tools._format_curl_command(
+            "https://example.com:8443/x",
+            "GET",
+            out_path="/tmp/ignored",
+            resolved_ips=["10.0.0.5"],
+        )
+        assert command[command.index("--resolve") + 1] == "example.com:8443:10.0.0.5"
+
+    def test_curl_request_pins_resolved_ip(self, mock_execute_command, sample_curl_output):
+        """curl_request pins the SSRF-classified IP and disables redirects."""
+        mock_execute_command.return_value = sample_curl_output
+
+        self.http_tools.curl_request("https://example.com/get")
+
+        call_args = mock_execute_command.call_args[0][0]
+        assert "--resolve" in call_args
+        assert call_args[call_args.index("--resolve") + 1] == "example.com:443:93.184.216.34"
+        assert "--max-redirs" in call_args
+        assert call_args[call_args.index("--max-redirs") + 1] == "0"
+        assert "-L" not in call_args
+
+    def test_api_test_pins_resolved_ip(self, mock_execute_command, sample_curl_output):
+        """api_test pins the SSRF-classified IP and disables redirects."""
+        mock_execute_command.return_value = sample_curl_output
+
+        self.http_tools.api_test("https://example.com/status/200")
+
+        call_args = mock_execute_command.call_args[0][0]
+        assert "--resolve" in call_args
+        assert call_args[call_args.index("--resolve") + 1] == "example.com:443:93.184.216.34"
+        assert "--max-redirs" in call_args
+        assert "-L" not in call_args
+
+    def test_curl_request_blocks_loopback(self, mock_execute_command):
+        """A loopback URL is blocked by SSRF classification (fail-closed);
+        curl is never executed."""
+        result = self.http_tools.curl_request("http://127.0.0.1:8080/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_curl_request_blocks_metadata(self, mock_execute_command):
+        """A cloud-metadata URL (169.254.169.254) is blocked before curl runs."""
+        result = self.http_tools.curl_request("http://169.254.169.254/latest/meta-data/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_api_test_blocks_loopback(self, mock_execute_command):
+        """api_test blocks a loopback URL before executing curl."""
+        result = self.http_tools.api_test("http://127.0.0.1:9000/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_httpie_request_blocks_metadata(self, mock_execute_command):
+        """httpie_request SSRF-classifies the host and blocks metadata
+        (un-pinned caveat, but classification gate still fires)."""
+        result = self.http_tools.httpie_request("http://169.254.169.254/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_validate_url_delegates_to_central_validator(self):
+        """_validate_url stays bool-equivalent after delegating to the central
+        validate_url (REF-02)."""
+        assert self.http_tools._validate_url("https://example.com") is True
+        assert self.http_tools._validate_url("http://localhost:8080") is True
+        assert self.http_tools._validate_url("https://api.github.com/v1/users") is True
+        assert self.http_tools._validate_url("") is False
+        assert self.http_tools._validate_url(None) is False
+        assert self.http_tools._validate_url("not-a-url") is False
+        assert self.http_tools._validate_url("ftp://example.com") is False

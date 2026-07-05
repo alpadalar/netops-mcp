@@ -2,7 +2,6 @@
 DNS tools for NetOps MCP.
 """
 
-import re
 from typing import Dict, List, Optional
 from mcp.types import TextContent as Content
 from ..base import NetOpsTool
@@ -12,23 +11,26 @@ class DNSTools(NetOpsTool):
     """Tools for DNS operations and queries."""
 
     def _validate_domain(self, domain: str) -> bool:
-        """Validate domain name format.
+        """Validate the queried domain's FORMAT via the central validator (REF-02).
+
+        The domain being *queried* is DATA — you are literally asking DNS to
+        resolve it — so it is format-only and is NEVER SSRF-classified (that
+        would break "what does X resolve to?" and the DNS-rebind fixture). Keeps
+        the historical ``-> bool`` contract.
 
         Args:
             domain: Domain to validate
 
         Returns:
-            True if domain is valid
+            True if the domain is a well-formed name
         """
-        if not domain or not isinstance(domain, str):
+        from ...validators.input_validator import ValidationError, validate_domain
+
+        try:
+            validate_domain(domain)
+            return True
+        except ValidationError:
             return False
-        
-        # Basic domain validation regex
-        domain_pattern = re.compile(
-            r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
-        )
-        
-        return bool(domain_pattern.match(domain))
 
     def _validate_record_type(self, record_type: str) -> bool:
         """Validate DNS record type.
@@ -46,28 +48,35 @@ class DNSTools(NetOpsTool):
         return record_type.upper() in valid_record_types
 
     def _validate_dns_server(self, server: str) -> bool:
-        """Validate DNS server address.
+        """Validate the DNS server FORMAT (IP literal or hostname) via the
+        central validators (REF-02). Keeps the ``-> bool`` contract.
+
+        The server is the resolver *connection target*, so it is additionally
+        SSRF-classified by ``_enforce_ssrf`` in the query methods — this method
+        stays format-only.
 
         Args:
             server: DNS server to validate
 
         Returns:
-            True if DNS server is valid
+            True if the server is a valid IP literal or hostname
         """
-        if not server or not isinstance(server, str):
+        from ...validators.input_validator import (
+            ValidationError,
+            validate_hostname,
+            validate_ip_address,
+        )
+
+        try:
+            validate_ip_address(server)
+            return True
+        except ValidationError:
+            pass
+        try:
+            validate_hostname(server)
+            return True
+        except ValidationError:
             return False
-        
-        # Check if it's a valid IP address
-        ip_pattern = re.compile(
-            r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
-        )
-        
-        # Check if it's a valid domain name
-        domain_pattern = re.compile(
-            r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
-        )
-        
-        return bool(ip_pattern.match(server) or domain_pattern.match(server))
 
     def nslookup_query(self, domain: str, record_type: str = "A", server: Optional[str] = None) -> List[Content]:
         """Perform DNS lookup using nslookup.
@@ -89,6 +98,11 @@ class DNSTools(NetOpsTool):
             
             if server and not self._validate_dns_server(server):
                 raise ValueError("Invalid DNS server provided")
+            if server:
+                # SEC-03: the resolver server is a connection target ->
+                # SSRF-classify it (non-HTTP fail-open on resolution failure).
+                # The queried `domain` above is DATA and is NOT classified.
+                self._enforce_ssrf(server)
 
             command = ['nslookup', '-type=' + record_type, domain]
             if server:
@@ -131,6 +145,11 @@ class DNSTools(NetOpsTool):
             
             if server and not self._validate_dns_server(server):
                 raise ValueError("Invalid DNS server provided")
+            if server:
+                # SEC-03: the resolver server is a connection target ->
+                # SSRF-classify it (non-HTTP fail-open on resolution failure).
+                # The queried `domain` above is DATA and is NOT classified.
+                self._enforce_ssrf(server)
 
             command = ['dig', '+short', record_type, domain]
             if server:

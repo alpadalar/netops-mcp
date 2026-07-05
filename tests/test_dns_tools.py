@@ -291,11 +291,46 @@ class TestDNSTools:
         mock_execute_command.return_value = sample_nslookup_output
         
         result = self.dns_tools.nslookup_query("google.com", server="invalid-server")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Check for successful response (server validation is not strict)
         assert '"success": true' in result[0].text
+
+    @pytest.mark.parametrize("method_name", ["nslookup_query", "dig_query"])
+    def test_query_loopback_server_blocked(self, method_name, mock_execute_command,
+                                           sample_nslookup_output):
+        """SEC-03: the resolver `server` is a connection target -> a loopback
+        server is blocked before the subprocess runs."""
+        mock_execute_command.return_value = sample_nslookup_output
+
+        method = getattr(self.dns_tools, method_name)
+        result = method("google.com", server="127.0.0.1")
+
+        assert '"error": true' in result[0].text
+        assert "loopback" in result[0].text.lower()
+        mock_execute_command.assert_not_called()
+
+    def test_queried_domain_resolving_to_loopback_still_runs(self, mock_execute_command,
+                                                             sample_nslookup_output):
+        """T-4-DATA: the queried domain is DATA, never SSRF-classified. Asking
+        DNS to resolve a name that maps to loopback must still run — otherwise
+        "what does X resolve to?" and the DNS-rebind fixture would break."""
+        mock_execute_command.return_value = sample_nslookup_output
+
+        result = self.dns_tools.nslookup_query("localhost")
+
+        assert '"success": true' in result[0].text
+        mock_execute_command.assert_called_once()
+
+    def test_normal_server_proceeds(self, mock_execute_command, sample_nslookup_output):
+        """A normal (global) resolver server passes the SSRF gate and runs."""
+        mock_execute_command.return_value = sample_nslookup_output
+
+        result = self.dns_tools.dig_query("google.com", server="8.8.8.8")
+
+        assert '"success": true' in result[0].text
+        mock_execute_command.assert_called_once()
 
     def test_validate_domain(self):
         """Test domain validation."""

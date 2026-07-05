@@ -64,9 +64,7 @@ class TestCorsBehavior:
 
     def test_explicit_origins_do_not_reflect_disallowed(self):
         """Explicit origins: disallowed origins get NO ACAO; allowed get themselves."""
-        app = _build_app(
-            allow_origins=["http://localhost:3000"], allow_credentials=True
-        )
+        app = _build_app(allow_origins=["http://localhost:3000"], allow_credentials=True)
         client = TestClient(app)
 
         # Disallowed evil origin: no access-control-allow-origin header at all
@@ -87,7 +85,4 @@ class TestCorsBehavior:
                 "Access-Control-Request-Method": "GET",
             },
         )
-        assert (
-            ok_response.headers["access-control-allow-origin"]
-            == "http://localhost:3000"
-        )
+        assert ok_response.headers["access-control-allow-origin"] == "http://localhost:3000"

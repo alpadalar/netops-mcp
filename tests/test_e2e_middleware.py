@@ -22,7 +22,6 @@ import hashlib
 
 import httpx
 import pytest
-
 from netops_mcp.middleware.auth import AuthenticationMiddleware
 from netops_mcp.middleware.rate_limiter import RateLimitMiddleware
 
@@ -66,9 +65,7 @@ def _scalar_metric(metrics_text: str, name: str) -> int:
 def test_no_key_returns_401(live_server):
     """An unauthenticated MCP request is rejected by AuthenticationMiddleware (401)."""
     base_url, _key, _server = live_server
-    response = httpx.post(
-        base_url + MCP_PATH, json=_LIST_TOOLS, headers=_MCP_HEADERS, timeout=5
-    )
+    response = httpx.post(base_url + MCP_PATH, json=_LIST_TOOLS, headers=_MCP_HEADERS, timeout=5)
     assert response.status_code == 401
 
 
@@ -139,9 +136,7 @@ def test_metrics_requires_auth(live_server):
     # No key -> 401 from AuthenticationMiddleware.
     assert httpx.get(base_url + "/metrics", timeout=5).status_code == 401
     # Valid key -> 200 Prometheus dump.
-    ok = httpx.get(
-        base_url + "/metrics", headers={"Authorization": f"Bearer {key}"}, timeout=5
-    )
+    ok = httpx.get(base_url + "/metrics", headers={"Authorization": f"Bearer {key}"}, timeout=5)
     assert ok.status_code == 200
     assert "http_requests_total" in ok.text
     # /health is still reachable without a key.

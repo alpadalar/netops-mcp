@@ -2,8 +2,10 @@
 Security scanning tools for NetOps MCP.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
+
 from mcp.types import TextContent as Content
+
 from ..base import NetOpsTool
 
 
@@ -64,21 +66,21 @@ class ScanningTools(NetOpsTool):
 
             # Use nmap for port scanning. Target is the pinned resolved IP(s) for
             # a plain hostname (WR-02), else the original literal/range/CIDR.
-            command = ['nmap', '-sT', '-T4', '-p', ports]
+            command = ["nmap", "-sT", "-T4", "-p", ports]
             command.extend(pinned if pinned else [target])
             result = self._execute_command(command, timeout)
-            
+
             response_data = {
                 "target": target,
                 "ports": ports,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "port_scan")
-            
+
         except Exception as e:
             return self._handle_error("port scan", e)
 
@@ -104,10 +106,10 @@ class ScanningTools(NetOpsTool):
                 raise ValueError("Invalid ports specification provided")
 
             # Use nmap for service enumeration
-            command = ['nmap', '-sV', '-sC', '--version-intensity', '5']
+            command = ["nmap", "-sV", "-sC", "--version-intensity", "5"]
 
             if ports:
-                command.extend(['-p', ports])
+                command.extend(["-p", ports])
 
             # Add target: pinned resolved IP(s) for a plain hostname (WR-02),
             # else the original literal/range/CIDR target passed through.
@@ -117,17 +119,17 @@ class ScanningTools(NetOpsTool):
                 command.append(target)
 
             result = self._execute_command(command, 180)
-            
+
             response_data = {
                 "target": target,
                 "ports": ports,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "service_enumeration")
-            
+
         except Exception as e:
             return self._handle_error("service enumeration", e)

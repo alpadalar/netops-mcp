@@ -2,8 +2,10 @@
 DNS tools for NetOps MCP.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
+
 from mcp.types import TextContent as Content
+
 from ..base import NetOpsTool
 
 
@@ -43,8 +45,8 @@ class DNSTools(NetOpsTool):
         """
         if not record_type or not isinstance(record_type, str):
             return False
-        
-        valid_record_types = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'CNAME', 'PTR', 'SOA', 'SRV', 'CAA']
+
+        valid_record_types = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "PTR", "SOA", "SRV", "CAA"]
         return record_type.upper() in valid_record_types
 
     def _validate_dns_server(self, server: str) -> bool:
@@ -78,7 +80,9 @@ class DNSTools(NetOpsTool):
         except ValidationError:
             return False
 
-    def nslookup_query(self, domain: str, record_type: str = "A", server: Optional[str] = None) -> List[Content]:
+    def nslookup_query(
+        self, domain: str, record_type: str = "A", server: Optional[str] = None
+    ) -> List[Content]:
         """Perform DNS lookup using nslookup.
 
         Args:
@@ -92,10 +96,10 @@ class DNSTools(NetOpsTool):
         try:
             if not self._validate_domain(domain):
                 raise ValueError("Invalid domain provided")
-            
+
             if not self._validate_record_type(record_type):
                 raise ValueError("Invalid record type provided")
-            
+
             if server and not self._validate_dns_server(server):
                 raise ValueError("Invalid DNS server provided")
             if server:
@@ -104,12 +108,12 @@ class DNSTools(NetOpsTool):
                 # The queried `domain` above is DATA and is NOT classified.
                 self._enforce_ssrf(server)
 
-            command = ['nslookup', '-type=' + record_type, domain]
+            command = ["nslookup", "-type=" + record_type, domain]
             if server:
                 command.append(server)
-            
+
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "domain": domain,
                 "record_type": record_type,
@@ -117,15 +121,17 @@ class DNSTools(NetOpsTool):
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "nslookup_query")
-            
+
         except Exception as e:
             return self._handle_error("nslookup query", e)
 
-    def dig_query(self, domain: str, record_type: str = "A", server: Optional[str] = None) -> List[Content]:
+    def dig_query(
+        self, domain: str, record_type: str = "A", server: Optional[str] = None
+    ) -> List[Content]:
         """Perform DNS lookup using dig.
 
         Args:
@@ -139,10 +145,10 @@ class DNSTools(NetOpsTool):
         try:
             if not self._validate_domain(domain):
                 raise ValueError("Invalid domain provided")
-            
+
             if not self._validate_record_type(record_type):
                 raise ValueError("Invalid record type provided")
-            
+
             if server and not self._validate_dns_server(server):
                 raise ValueError("Invalid DNS server provided")
             if server:
@@ -151,12 +157,12 @@ class DNSTools(NetOpsTool):
                 # The queried `domain` above is DATA and is NOT classified.
                 self._enforce_ssrf(server)
 
-            command = ['dig', '+short', record_type, domain]
+            command = ["dig", "+short", record_type, domain]
             if server:
-                command.extend(['@' + server])
-            
+                command.extend(["@" + server])
+
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "domain": domain,
                 "record_type": record_type,
@@ -164,11 +170,11 @@ class DNSTools(NetOpsTool):
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "dig_query")
-            
+
         except Exception as e:
             return self._handle_error("dig query", e)
 
@@ -185,23 +191,23 @@ class DNSTools(NetOpsTool):
         try:
             if not self._validate_domain(domain):
                 raise ValueError("Invalid domain provided")
-            
+
             if not self._validate_record_type(record_type):
                 raise ValueError("Invalid record type provided")
 
-            command = ['host', '-t', record_type, domain]
+            command = ["host", "-t", record_type, domain]
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "domain": domain,
                 "record_type": record_type,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "host_lookup")
-            
+
         except Exception as e:
             return self._handle_error("host lookup", e)

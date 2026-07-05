@@ -9,8 +9,8 @@ This package contains HTTP middleware components:
 """
 
 from .auth import AuthenticationMiddleware
+from .metrics import MetricsCollector, MetricsMiddleware, create_metrics_endpoint, metrics_collector
 from .rate_limiter import RateLimitMiddleware
-from .metrics import MetricsMiddleware, MetricsCollector, metrics_collector, create_metrics_endpoint
 
 __all__ = [
     "AuthenticationMiddleware",
@@ -18,6 +18,5 @@ __all__ = [
     "MetricsMiddleware",
     "MetricsCollector",
     "metrics_collector",
-    "create_metrics_endpoint"
+    "create_metrics_endpoint",
 ]
-

@@ -38,11 +38,11 @@ class ConnectivityTools(NetOpsTool):
             # for a reply for each packet"). Passing seconds on darwin makes
             # every reply slower than ~10ms count as lost. Convert on darwin;
             # Linux argv stays byte-identical.
-            wait = str(timeout * 1000) if sys.platform == 'darwin' else str(timeout)
-            command = ['ping', '-c', str(count), '-W', wait, host]
+            wait = str(timeout * 1000) if sys.platform == "darwin" else str(timeout)
+            command = ["ping", "-c", str(count), "-W", wait, host]
             result = self._execute_command(command, timeout + 5)
-            
-            if 'packets transmitted' in result["stdout"]:
+
+            if "packets transmitted" in result["stdout"]:
                 # Parse ping output whenever a stats block is present,
                 # regardless of exit code (unreachable hosts exit 1 but
                 # still print full statistics — BUG-01 locked decision).
@@ -51,18 +51,18 @@ class ConnectivityTools(NetOpsTool):
                     "host": host,
                     "success": result["success"],
                     "stats": ping_stats,
-                    "raw_output": result["stdout"]
+                    "raw_output": result["stdout"],
                 }
             else:
                 response_data = {
                     "host": host,
                     "success": False,
                     "error": result["stderr"],
-                    "raw_output": result["stdout"]
+                    "raw_output": result["stdout"],
                 }
-            
+
             return self._format_response(response_data, "ping_host")
-            
+
         except Exception as e:
             return self._handle_error("ping host", e)
 
@@ -89,9 +89,9 @@ class ConnectivityTools(NetOpsTool):
             # seconds per probe, guaranteeing subprocess timeouts on filtered
             # paths. Use a small fixed per-probe wait; the overall deadline is
             # enforced by the subprocess timeout below.
-            command = ['traceroute', '-m', str(max_hops), '-w', '3', target]
+            command = ["traceroute", "-m", str(max_hops), "-w", "3", target]
             result = self._execute_command(command, timeout + 10)
-            
+
             if result["success"]:
                 # Parse traceroute output
                 hops = OutputParser.parse_traceroute_output(result["stdout"])
@@ -99,18 +99,18 @@ class ConnectivityTools(NetOpsTool):
                     "target": target,
                     "success": True,
                     "hops": hops,
-                    "raw_output": result["stdout"]
+                    "raw_output": result["stdout"],
                 }
             else:
                 response_data = {
                     "target": target,
                     "success": False,
                     "error": result["stderr"],
-                    "raw_output": result["stdout"]
+                    "raw_output": result["stdout"],
                 }
-            
+
             return self._format_response(response_data, "traceroute_path")
-            
+
         except Exception as e:
             return self._handle_error("traceroute path", e)
 
@@ -135,7 +135,7 @@ class ConnectivityTools(NetOpsTool):
             # timeout must never be placed in argv (mtr would probe it as an
             # extra target host). The overall deadline is enforced by the
             # subprocess timeout passed to _execute_command below.
-            command = ['mtr', '-c', str(count), '--report', target]
+            command = ["mtr", "-c", str(count), "--report", target]
             result = self._execute_command(command, timeout + 10)
 
             if result["success"]:
@@ -145,18 +145,18 @@ class ConnectivityTools(NetOpsTool):
                     "target": target,
                     "success": True,
                     "stats": mtr_stats,
-                    "raw_output": result["stdout"]
+                    "raw_output": result["stdout"],
                 }
             else:
                 response_data = {
                     "target": target,
                     "success": False,
                     "error": result["stderr"],
-                    "raw_output": result["stdout"]
+                    "raw_output": result["stdout"],
                 }
-            
+
             return self._format_response(response_data, "mtr_monitor")
-            
+
         except Exception as e:
             return self._handle_error("mtr monitor", e)
 
@@ -180,7 +180,7 @@ class ConnectivityTools(NetOpsTool):
             # (non-HTTP fail-open on resolution failure).
             self._enforce_ssrf(host, port)
 
-            command = ['timeout', str(timeout), 'telnet', host, str(port)]
+            command = ["timeout", str(timeout), "telnet", host, str(port)]
             result = self._execute_command(command, timeout + 5)
 
             # WR-06: on an OPEN port telnet stays interactive until the
@@ -198,11 +198,11 @@ class ConnectivityTools(NetOpsTool):
                 "success": result["success"],
                 "connected": connected,
                 "raw_output": result["stdout"],
-                "error": result["stderr"] if not result["success"] else None
+                "error": result["stderr"] if not result["success"] else None,
             }
-            
+
             return self._format_response(response_data, "telnet_connect")
-            
+
         except Exception as e:
             return self._handle_error("telnet connect", e)
 
@@ -226,18 +226,18 @@ class ConnectivityTools(NetOpsTool):
             # (non-HTTP fail-open on resolution failure).
             self._enforce_ssrf(host, port)
 
-            command = ['nc', '-z', '-w', str(timeout), host, str(port)]
+            command = ["nc", "-z", "-w", str(timeout), host, str(port)]
             result = self._execute_command(command, timeout + 5)
-            
+
             response_data = {
                 "host": host,
                 "port": port,
                 "success": result["success"],
                 "connected": result["success"],
                 "raw_output": result["stdout"],
-                "error": result["stderr"] if not result["success"] else None
+                "error": result["stderr"] if not result["success"] else None,
             }
-            
+
             return self._format_response(response_data, "netcat_test")
 
         except Exception as e:

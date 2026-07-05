@@ -11,6 +11,7 @@ This module provides the foundation for all NetOps MCP tools, including:
 import logging
 import subprocess
 from typing import Any, Dict, List, Optional, Union
+
 from mcp.types import TextContent as Content
 
 from ..config.models import Config, SecurityConfig
@@ -18,7 +19,7 @@ from ..config.models import Config, SecurityConfig
 
 class NetOpsTool:
     """Base class for NetOps MCP tools.
-    
+
     This class provides common functionality used by all NetOps tool implementations:
     - Standardized logging
     - Response formatting
@@ -50,7 +51,7 @@ class NetOpsTool:
             List of Content objects
         """
         import json
-        
+
         if isinstance(data, dict):
             formatted = json.dumps(data, indent=2, default=str)
         elif isinstance(data, list):
@@ -72,7 +73,7 @@ class NetOpsTool:
         """
         try:
             self.logger.debug(f"Executing command: {' '.join(command)}")
-            
+
             # stdin=DEVNULL: capture_output only redirects stdout/stderr, so
             # without this every child spawned through this helper would
             # inherit the server's fd 0 — which in stdio transport mode IS
@@ -84,21 +85,17 @@ class NetOpsTool:
             # RUN_TESTS_ON_START pytest child in server.py passes
             # stdin=DEVNULL directly (WR-01).
             result = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                stdin=subprocess.DEVNULL
+                command, capture_output=True, text=True, timeout=timeout, stdin=subprocess.DEVNULL
             )
-            
+
             return {
                 "success": result.returncode == 0,
                 "stdout": result.stdout,
                 "stderr": result.stderr,
                 "return_code": result.returncode,
-                "command": ' '.join(command)
+                "command": " ".join(command),
             }
-            
+
         except subprocess.TimeoutExpired:
             self.logger.error(f"Command timed out: {' '.join(command)}")
             return {
@@ -106,7 +103,7 @@ class NetOpsTool:
                 "stdout": "",
                 "stderr": "Command timed out",
                 "return_code": -1,
-                "command": ' '.join(command)
+                "command": " ".join(command),
             }
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Command failed: {' '.join(command)} - {e}")
@@ -115,7 +112,7 @@ class NetOpsTool:
                 "stdout": e.stdout or "",
                 "stderr": e.stderr or str(e),
                 "return_code": e.returncode,
-                "command": ' '.join(command)
+                "command": " ".join(command),
             }
         except FileNotFoundError:
             self.logger.error(f"Command not found: {command[0]}")
@@ -124,7 +121,7 @@ class NetOpsTool:
                 "stdout": "",
                 "stderr": f"Command not found: {command[0]}",
                 "return_code": -1,
-                "command": ' '.join(command)
+                "command": " ".join(command),
             }
         except Exception as e:
             self.logger.error(f"Unexpected error executing command: {e}")
@@ -133,7 +130,7 @@ class NetOpsTool:
                 "stdout": "",
                 "stderr": str(e),
                 "return_code": -1,
-                "command": ' '.join(command)
+                "command": " ".join(command),
             }
 
     def _handle_error(self, operation: str, error: Exception) -> List[Content]:
@@ -153,7 +150,7 @@ class NetOpsTool:
             "error": True,
             "operation": operation,
             "message": error_msg,
-            "type": type(error).__name__
+            "type": type(error).__name__,
         }
 
         return self._format_response(error_response)

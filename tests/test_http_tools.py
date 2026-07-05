@@ -18,8 +18,7 @@ from netops_mcp.tools.network.http_tools import HTTPTools
 def _find_url(command):
     """Locate the request URL inside a built curl/api argv."""
     return next(
-        arg for arg in command
-        if isinstance(arg, str) and arg.startswith(("http://", "https://"))
+        arg for arg in command if isinstance(arg, str) and arg.startswith(("http://", "https://"))
     )
 
 
@@ -33,21 +32,24 @@ class TestHTTPTools:
     def test_initialization(self):
         """Test HTTPTools initialization."""
         assert self.http_tools is not None
-        assert hasattr(self.http_tools, 'logger')
-        assert hasattr(self.http_tools, '_execute_command')
+        assert hasattr(self.http_tools, "logger")
+        assert hasattr(self.http_tools, "_execute_command")
 
-    @pytest.mark.parametrize("url", [
-        "https://httpbin.org/get",
-        "https://httpbin.org/post",
-        "https://httpbin.org/status/200",
-        "https://httpbin.org/status/404"
-    ])
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://httpbin.org/get",
+            "https://httpbin.org/post",
+            "https://httpbin.org/status/200",
+            "https://httpbin.org/status/404",
+        ],
+    )
     def test_curl_request_valid_urls(self, url, mock_execute_command, sample_curl_output):
         """Test curl request with various valid URLs."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         result = self.http_tools.curl_request(url)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert url in result[0].text
@@ -56,10 +58,10 @@ class TestHTTPTools:
     def test_curl_request_with_headers(self, mock_execute_command, sample_curl_output):
         """Test curl request with custom headers."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         headers = {"User-Agent": "TestBot", "Accept": "application/json"}
         result = self.http_tools.curl_request("https://example.com", headers=headers)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify headers were passed to command
@@ -71,10 +73,10 @@ class TestHTTPTools:
     def test_curl_request_with_data(self, mock_execute_command, sample_curl_output):
         """Test curl request with POST data."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         data = {"key": "value", "test": "data"}
         result = self.http_tools.curl_request("https://example.com", method="POST", data=data)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify data was passed to command
@@ -85,9 +87,9 @@ class TestHTTPTools:
     def test_curl_request_with_timeout(self, mock_execute_command, sample_curl_output):
         """Test curl request with custom timeout."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         result = self.http_tools.curl_request("https://example.com", timeout=30)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify timeout was passed to command
@@ -103,11 +105,11 @@ class TestHTTPTools:
             "stdout": "",
             "stderr": "curl: (6) Could not resolve host: invalid-url",
             "return_code": 6,
-            "command": "curl -s -w @- -o /tmp/curl_output -X GET invalid-url"
+            "command": "curl -s -w @- -o /tmp/curl_output -X GET invalid-url",
         }
-        
+
         result = self.http_tools.curl_request("invalid-url")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
@@ -115,7 +117,7 @@ class TestHTTPTools:
     def test_curl_request_empty_url(self):
         """Test curl request with empty URL."""
         result = self.http_tools.curl_request("")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
@@ -123,7 +125,7 @@ class TestHTTPTools:
     def test_curl_request_none_url(self):
         """Test curl request with None URL."""
         result = self.http_tools.curl_request(None)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
@@ -135,11 +137,11 @@ class TestHTTPTools:
             "stdout": "",
             "stderr": "Command timed out",
             "return_code": -1,
-            "command": "curl -s -w @- -o /tmp/curl_output -X GET https://example.com"
+            "command": "curl -s -w @- -o /tmp/curl_output -X GET https://example.com",
         }
-        
+
         result = self.http_tools.curl_request("https://example.com")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Check for error response instead of specific timeout text
@@ -149,9 +151,9 @@ class TestHTTPTools:
     def test_curl_request_different_methods(self, method, mock_execute_command, sample_curl_output):
         """Test curl request with different HTTP methods."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         result = self.http_tools.curl_request("https://example.com", method=method)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify method was passed to command
@@ -162,9 +164,9 @@ class TestHTTPTools:
     def test_httpie_request_valid_url(self, mock_execute_command, sample_curl_output):
         """Test httpie request with valid URL."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         result = self.http_tools.httpie_request("https://example.com")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "https://example.com" in result[0].text
@@ -172,10 +174,10 @@ class TestHTTPTools:
     def test_httpie_request_with_headers(self, mock_execute_command, sample_curl_output):
         """Test httpie request with custom headers."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         headers = {"User-Agent": "TestBot", "Accept": "application/json"}
         result = self.http_tools.httpie_request("https://example.com", headers=headers)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify headers were passed to command
@@ -186,10 +188,10 @@ class TestHTTPTools:
     def test_httpie_request_with_data(self, mock_execute_command, sample_curl_output):
         """Test httpie request with POST data."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         data = {"key": "value", "test": "data"}
         result = self.http_tools.httpie_request("https://example.com", method="POST", data=data)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify data was passed to command
@@ -204,11 +206,11 @@ class TestHTTPTools:
             "stdout": "",
             "stderr": "http: error: ConnectionError",
             "return_code": 1,
-            "command": "http GET invalid-url"
+            "command": "http GET invalid-url",
         }
-        
+
         result = self.http_tools.httpie_request("invalid-url")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
@@ -216,9 +218,9 @@ class TestHTTPTools:
     def test_api_test_valid_url(self, mock_execute_command, sample_curl_output):
         """Test API test with valid URL."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         result = self.http_tools.api_test("https://httpbin.org/status/200")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "200" in result[0].text
@@ -226,9 +228,9 @@ class TestHTTPTools:
     def test_api_test_expected_status_mismatch(self, mock_execute_command, sample_curl_output):
         """Test API test with status code mismatch."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         result = self.http_tools.api_test("https://httpbin.org/status/404", expected_status=200)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "expected" in result[0].text.lower()
@@ -236,10 +238,10 @@ class TestHTTPTools:
     def test_api_test_with_headers(self, mock_execute_command, sample_curl_output):
         """Test API test with custom headers."""
         mock_execute_command.return_value = sample_curl_output
-        
+
         headers = {"Authorization": "Bearer token123"}
         result = self.http_tools.api_test("https://example.com", headers=headers)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         # Verify headers were passed to command
@@ -251,29 +253,29 @@ class TestHTTPTools:
     def test_validate_url(self):
         """Test URL validation."""
         # Valid URLs
-        assert self.http_tools._validate_url("https://example.com") == True
-        assert self.http_tools._validate_url("http://localhost:8080") == True
-        assert self.http_tools._validate_url("https://api.github.com/v1/users") == True
-        
+        assert self.http_tools._validate_url("https://example.com") is True
+        assert self.http_tools._validate_url("http://localhost:8080") is True
+        assert self.http_tools._validate_url("https://api.github.com/v1/users") is True
+
         # Invalid URLs
-        assert self.http_tools._validate_url("") == False
-        assert self.http_tools._validate_url(None) == False
-        assert self.http_tools._validate_url("not-a-url") == False
-        assert self.http_tools._validate_url("ftp://example.com") == False
+        assert self.http_tools._validate_url("") is False
+        assert self.http_tools._validate_url(None) is False
+        assert self.http_tools._validate_url("not-a-url") is False
+        assert self.http_tools._validate_url("ftp://example.com") is False
 
     def test_validate_method(self):
         """Test HTTP method validation."""
         # Valid methods
-        assert self.http_tools._validate_method("GET") == True
-        assert self.http_tools._validate_method("POST") == True
-        assert self.http_tools._validate_method("PUT") == True
-        assert self.http_tools._validate_method("DELETE") == True
-        assert self.http_tools._validate_method("PATCH") == True
-        
+        assert self.http_tools._validate_method("GET") is True
+        assert self.http_tools._validate_method("POST") is True
+        assert self.http_tools._validate_method("PUT") is True
+        assert self.http_tools._validate_method("DELETE") is True
+        assert self.http_tools._validate_method("PATCH") is True
+
         # Invalid methods
-        assert self.http_tools._validate_method("INVALID") == False
-        assert self.http_tools._validate_method("") == False
-        assert self.http_tools._validate_method(None) == False
+        assert self.http_tools._validate_method("INVALID") is False
+        assert self.http_tools._validate_method("") is False
+        assert self.http_tools._validate_method(None) is False
 
     def test_format_curl_command(self):
         """Test curl command formatting."""
@@ -282,9 +284,9 @@ class TestHTTPTools:
         headers = {"Content-Type": "application/json"}
         data = {"key": "value"}
         timeout = 30
-        
+
         command = self.http_tools._format_curl_command(url, method, headers, data, timeout)
-        
+
         assert "curl" in command
         assert url in command
         # Check for method in command (format may vary)
@@ -306,9 +308,9 @@ class TestHTTPTools:
         headers = {"Content-Type": "application/json"}
         data = {"key": "value"}
         timeout = 30
-        
+
         command = self.http_tools._format_httpie_command(url, method, headers, data, timeout)
-        
+
         assert "http" in command
         assert method in command
         assert url in command
@@ -327,9 +329,9 @@ class TestHTTPTools:
   "size_download": "1234",
   "speed_download": "10000"
 }"""
-        
+
         parsed = self.http_tools._parse_curl_output(curl_output)
-        
+
         assert parsed["http_code"] == "200"
         assert parsed["time_total"] == "0.123"
         assert parsed["size_download"] == "1234"
@@ -337,31 +339,34 @@ class TestHTTPTools:
     def test_parse_curl_output_invalid_json(self):
         """Test curl output parsing with invalid JSON."""
         curl_output = "Invalid JSON output"
-        
+
         parsed = self.http_tools._parse_curl_output(curl_output)
-        
+
         # Check for error in parsed output
         assert "error" in parsed
 
     def test_handle_http_error(self):
         """Test HTTP error handling."""
         error = Exception("Connection failed")
-        
+
         result = self.http_tools._handle_error("curl request", error)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
         assert "curl request" in result[0].text
 
-    @pytest.mark.parametrize("url,expected", [
-        ("https://httpbin.org/status/200", True),
-        ("https://httpbin.org/status/404", True),
-        ("https://httpbin.org/status/500", True),
-        ("invalid-url", False),
-        ("", False),
-        (None, False)
-    ])
+    @pytest.mark.parametrize(
+        "url,expected",
+        [
+            ("https://httpbin.org/status/200", True),
+            ("https://httpbin.org/status/404", True),
+            ("https://httpbin.org/status/500", True),
+            ("invalid-url", False),
+            ("", False),
+            (None, False),
+        ],
+    )
     def test_url_validation_edge_cases(self, url, expected):
         """Test URL validation with edge cases."""
         assert self.http_tools._validate_url(url) == expected
@@ -369,9 +374,9 @@ class TestHTTPTools:
     def test_command_execution_error_handling(self, mock_execute_command):
         """Test error handling when command execution fails."""
         mock_execute_command.side_effect = Exception("Command execution failed")
-        
+
         result = self.http_tools.curl_request("https://example.com")
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "error" in result[0].text.lower()
@@ -383,9 +388,9 @@ class TestHTTPTools:
             "stdout": "",
             "stderr": "Operation timed out",
             "return_code": -1,
-            "command": "curl -s -w @- -o /tmp/curl_output -X GET https://example.com"
+            "command": "curl -s -w @- -o /tmp/curl_output -X GET https://example.com",
         }
-        
+
         result = self.http_tools.curl_request("https://example.com", timeout=5)
 
         assert len(result) == 1
@@ -455,9 +460,7 @@ class TestHTTPTools:
         """The hardcoded shared /tmp curl output paths must be gone (SEC-02)."""
         source = inspect.getsource(http_tools_module)
         # Strip comment lines before scanning for the shared literals.
-        code = "\n".join(
-            line for line in source.splitlines() if not line.lstrip().startswith("#")
-        )
+        code = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
         assert "/tmp/curl_output" not in code
         assert "/tmp/api_response" not in code
 
@@ -495,9 +498,9 @@ class TestHTTPTools:
             assert f"[BODY-FOR::{url}]" in text, f"missing own body for {url}"
             for other in urls:
                 if other != url:
-                    assert f"[BODY-FOR::{other}]" not in text, (
-                        f"cross-contamination: {other} leaked into {url}"
-                    )
+                    assert (
+                        f"[BODY-FOR::{other}]" not in text
+                    ), f"cross-contamination: {other} leaked into {url}"
 
     def test_api_test_concurrent_no_cross_contamination(self, mock_execute_command):
         """N concurrent api_test calls each read back only their own body."""
@@ -530,9 +533,9 @@ class TestHTTPTools:
             assert f"[BODY-FOR::{url}]" in text, f"missing own body for {url}"
             for other in urls:
                 if other != url:
-                    assert f"[BODY-FOR::{other}]" not in text, (
-                        f"cross-contamination: {other} leaked into {url}"
-                    )
+                    assert (
+                        f"[BODY-FOR::{other}]" not in text
+                    ), f"cross-contamination: {other} leaked into {url}"
 
     # ------------------------------------------------------------------
     # SEC-03 / TEST-04: curl IP-pin + redirect-off (redirect-to-metadata)

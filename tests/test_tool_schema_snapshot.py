@@ -20,7 +20,7 @@ import os
 from contextlib import ExitStack
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 from unittest.mock import patch
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -86,7 +86,13 @@ def _build_servers() -> Tuple[Any, Any]:
 def _stdio_snapshot(server: Any) -> Dict[str, Dict[str, Any]]:
     """Extract {name: {description, inputSchema}} from the SDK FastMCP (stdio) server."""
     tools = asyncio.run(server.mcp.list_tools())  # list[mcp.types.Tool]
-    return {t.name: {"description": t.description, "inputSchema": t.inputSchema} for t in tools}
+    snapshot: Dict[str, Dict[str, Any]] = {
+        t.name: {"description": t.description, "inputSchema": t.inputSchema} for t in tools
+    }
+    for entry in snapshot.values():
+        for prop in entry["inputSchema"].get("properties", {}).values():
+            _canonicalize_anyof(prop)
+    return snapshot
 
 
 def _http_snapshot(server: Any) -> Dict[str, Dict[str, Any]]:
@@ -97,10 +103,14 @@ def _http_snapshot(server: Any) -> Dict[str, Dict[str, Any]]:
         return {name: tool.to_mcp_tool() for name, tool in tools.items()}
 
     mcp_tools = asyncio.run(_get())
-    return {
+    snapshot: Dict[str, Dict[str, Any]] = {
         name: {"description": tool.description, "inputSchema": tool.inputSchema}
         for name, tool in mcp_tools.items()
     }
+    for entry in snapshot.values():
+        for prop in entry["inputSchema"].get("properties", {}).values():
+            _canonicalize_anyof(prop)
+    return snapshot
 
 
 @lru_cache(maxsize=1)
@@ -132,6 +142,38 @@ def _assert_or_update(snapshot: Dict[str, Dict[str, Any]], golden_path: Path) ->
     )
 
 
+def _canonicalize_anyof(prop: Dict[str, Any]) -> None:
+    """Flatten Python-3.10-style nested anyOf into the flat 3.11+ form, in place.
+
+    fastmcp 2.x on Python 3.10 emits, for Annotated[Optional[X], Field(...)] = None:
+        {"anyOf": [{"anyOf": [X, {"type":"null"}], "description": d}, {"type":"null"}], ...}
+    3.11+ emits the flat equivalent:
+        {"anyOf": [X, {"type":"null"}], "description": d, ...}
+    Flattening + hoisting + dedupe converts the former into the latter and is a
+    no-op on the latter, so goldens stay frozen across interpreters.
+    """
+    members = prop.get("anyOf")
+    if not isinstance(members, list):
+        return
+    flat: List[Dict[str, Any]] = []
+    for member in members:
+        if isinstance(member, dict) and "anyOf" in member:
+            for key, value in member.items():
+                if key != "anyOf" and key not in prop:
+                    prop[key] = value  # hoist e.g. description to property level
+            flat.extend(member["anyOf"])
+        else:
+            flat.append(member)
+    seen: set = set()
+    deduped: List[Dict[str, Any]] = []
+    for member in flat:
+        marker = json.dumps(member, sort_keys=True)
+        if marker not in seen:
+            seen.add(marker)
+            deduped.append(member)
+    prop["anyOf"] = deduped
+
+
 def _normalize(schema: Dict[str, Any]) -> Dict[str, Any]:
     """Strip the two legitimate cross-server differences before comparison.
 
@@ -142,6 +184,7 @@ def _normalize(schema: Dict[str, Any]) -> Dict[str, Any]:
     normalized: Dict[str, Any] = json.loads(json.dumps(schema))  # deep copy
     normalized.pop("title", None)
     for prop in normalized.get("properties", {}).values():
+        _canonicalize_anyof(prop)  # idempotent: extractors canonicalize upstream
         prop.pop("description", None)
         prop.pop("title", None)
     return normalized

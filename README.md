@@ -70,8 +70,11 @@ HTTP mode **requires an API key by default** and refuses to start without one â€
 see [Authentication](#authentication). Once a key is configured:
 
 ```bash
-python -m netops_mcp.server_http --host 0.0.0.0 --port 8815
-# or: ./start_http_server.sh   (also copies config.example.json to config.json)
+# Pass the config that holds your API key â€” without it the server loads
+# built-in defaults (require_auth: true, no keys) and fails fast.
+python -m netops_mcp.server_http --config config/config.json --host 0.0.0.0 --port 8815
+# or: NETOPS_MCP_CONFIG=config/config.json python -m netops_mcp.server_http
+# or: ./start_http_server.sh   (defaults to config/config.json)
 
 curl http://localhost:8815/health          # health check (no key required)
 ```

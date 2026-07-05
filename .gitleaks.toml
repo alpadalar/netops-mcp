@@ -1,0 +1,37 @@
+# .gitleaks.toml — NetOpsMCP publication secret-scan allowlist (REL-10)
+#
+# Used by `scripts/scan_history.sh` when the `gitleaks` binary is available.
+# It extends gitleaks' bundled ruleset and allowlists the only two benign
+# high-entropy sources that exist in this repository's git history, so the
+# publication hard gate does not drown in false positives (see RESEARCH
+# Pitfall 3: a naive scan lights up ~1000+ times on package hashes).
+#
+# Benign, allowlisted:
+#   1. uv.lock  — package-integrity hashes (public sha256 digests fetched from
+#                 files.pythonhosted.org; a lockfile of public artifact hashes,
+#                 not credentials).
+#   2. README   — the documented example digest
+#                 sha256:0f70dbbe4175927d0c7ff3bdc45622f13e6a5d306248731395a8995974effe25
+#                 which is the sha256 of the literal placeholder string "YOUR-KEY"
+#                 (a public documentation example, not a real key).
+#
+# Everything else (private-key blocks, AWS AKIA keys, real bearer/provider
+# tokens) is NOT allowlisted and remains a finding.
+
+title = "NetOpsMCP gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Benign high-entropy strings: uv.lock package hashes + README example digest"
+
+# uv.lock is a lockfile of public package-integrity hashes — allowlist the whole file.
+paths = [
+    '''^uv\.lock$''',
+]
+
+# The single documented README example digest (sha256 of the literal "YOUR-KEY").
+regexes = [
+    '''sha256:0f70dbbe4175927d0c7ff3bdc45622f13e6a5d306248731395a8995974effe25''',
+]

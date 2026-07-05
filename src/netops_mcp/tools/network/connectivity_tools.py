@@ -28,6 +28,10 @@ class ConnectivityTools(NetOpsTool):
         try:
             if not self._validate_host(host):
                 raise ValueError("Invalid host provided")
+            # SEC-03: SSRF-classify the connection target (loopback/link-local
+            # blocked by default). NON-HTTP fail-open: an unresolvable/down host
+            # is a legitimate diagnostic target and still proceeds (A3).
+            self._enforce_ssrf(host)
 
             # WR-03: ping's -W is per-reply wait in SECONDS on Linux iputils
             # but MILLISECONDS on macOS/BSD ("time in milliseconds to wait
@@ -76,6 +80,8 @@ class ConnectivityTools(NetOpsTool):
         try:
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
+            # SEC-03: SSRF-classify the connection target (non-HTTP fail-open).
+            self._enforce_ssrf(target)
 
             # WR-04 (same flag-misuse class as BUG-04): traceroute's `-w` is
             # the PER-PROBE wait, not an overall deadline. Passing the tool's
@@ -122,6 +128,8 @@ class ConnectivityTools(NetOpsTool):
         try:
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
+            # SEC-03: SSRF-classify the connection target (non-HTTP fail-open).
+            self._enforce_ssrf(target)
 
             # BUG-04: mtr's `-w` is `--report-wide` (takes no argument) — the
             # timeout must never be placed in argv (mtr would probe it as an
@@ -168,6 +176,9 @@ class ConnectivityTools(NetOpsTool):
                 raise ValueError("Invalid host provided")
             if not self._validate_port(port):
                 raise ValueError("Invalid port provided")
+            # SEC-03: SSRF-classify the connection target with its port
+            # (non-HTTP fail-open on resolution failure).
+            self._enforce_ssrf(host, port)
 
             command = ['timeout', str(timeout), 'telnet', host, str(port)]
             result = self._execute_command(command, timeout + 5)
@@ -211,6 +222,9 @@ class ConnectivityTools(NetOpsTool):
                 raise ValueError("Invalid host provided")
             if not self._validate_port(port):
                 raise ValueError("Invalid port provided")
+            # SEC-03: SSRF-classify the connection target with its port
+            # (non-HTTP fail-open on resolution failure).
+            self._enforce_ssrf(host, port)
 
             command = ['nc', '-z', '-w', str(timeout), host, str(port)]
             result = self._execute_command(command, timeout + 5)

@@ -160,12 +160,40 @@ class TestNetworkTools:
         """Test arping_host with command timeout."""
         with patch.object(self.network_tools, '_execute_command') as mock_execute:
             mock_execute.side_effect = TimeoutError("Command timed out")
-            
+
             result = self.network_tools.arping_host("google.com")
-            
+
             assert len(result) > 0
             assert result[0].type == "text"
             assert "error" in result[0].text.lower()
+
+    @pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+    def test_arping_host_loopback_blocked(self, host):
+        """SEC-03: arping_host SSRF-classifies its target; loopback is blocked
+        (before the subprocess) even though arping is NOT privileged-gated."""
+        with patch.object(self.network_tools, '_execute_command') as mock_execute:
+            result = self.network_tools.arping_host(host)
+
+            assert '"error": true' in result[0].text
+            assert "loopback" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    @pytest.mark.parametrize("host", ["8.8.8.8", "192.168.1.1", "google.com"])
+    def test_arping_host_global_and_private_allowed(self, host):
+        """SEC-03: global and private/LAN targets pass the SSRF gate and run
+        (default allow_private=True keeps LAN diagnostics working)."""
+        with patch.object(self.network_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "ARP ping results",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+            result = self.network_tools.arping_host(host)
+
+            assert "ARP ping" in result[0].text
+            mock_execute.assert_called_once()
 
     @pytest.mark.parametrize("valid_hosts,invalid_hosts", [
         (["google.com", "8.8.8.8", "192.168.1.1"], 

@@ -129,6 +129,10 @@ class NetworkTools(NetOpsTool):
         try:
             if not self._validate_host(host):
                 raise ValueError("Invalid host provided")
+            # SEC-03: SSRF-classify the connection target (loopback/link-local
+            # blocked by default; non-HTTP fail-open on resolution failure). Not
+            # privileged-gated — arping rides the NET_RAW capability layer.
+            self._enforce_ssrf(host)
 
             command = ['arping', '-c', str(count), host]
             result = self._execute_command(command, 30)

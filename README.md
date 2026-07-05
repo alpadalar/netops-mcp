@@ -1,5 +1,9 @@
 # NetOps MCP - Network Operations Tools MCP Server
 
+[![Tests](https://img.shields.io/github/actions/workflow/status/alpadalar/NetOpsMCP/test.yml?label=tests)](https://github.com/alpadalar/NetOpsMCP/actions/workflows/test.yml)
+[![Lint](https://img.shields.io/github/actions/workflow/status/alpadalar/NetOpsMCP/lint.yml?label=lint)](https://github.com/alpadalar/NetOpsMCP/actions/workflows/lint.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A comprehensive Model Context Protocol (MCP) server that provides access to essential network operations and infrastructure tools through a standardized interface.
 
 ## 🚀 Features
@@ -60,7 +64,7 @@ httpie (optional, for enhanced HTTP testing)
 ```
 
 ### Python Requirements
-- Python 3.8+
+- Python 3.10+
 - uv package manager (recommended)
 
 ## 🛠️ Installation
@@ -159,17 +163,13 @@ result = nmap_scan("192.168.1.1", ports="1-1000", scan_type="basic")
 > unaffected.** To opt out explicitly, set `"require_auth": false` in the
 > config file (NOT recommended).
 
-> **⚠️ Known limitation (until Phase 3):** What is active today is the
-> **fail-fast startup gate** — with `require_auth: true` and no key
-> configured, the server refuses to start (see *First Run* below). **Per-request
-> enforcement is not yet wired to the served endpoint:** the authentication,
-> rate-limiting, and CORS middleware are not yet applied to the live HTTP app,
-> so once a key is configured the server starts but does **not** currently
-> reject keyless requests at runtime. Wiring the middleware to the served app
-> (and the end-to-end tests that prove it) lands in **Phase 3 (REF-07)**. Until
-> then, do **not** expose the HTTP endpoint on an untrusted network assuming
-> requests are authenticated — run it only on a trusted/isolated network or
-> behind an authenticating reverse proxy. stdio mode is unaffected.
+> **Enforcement:** the authentication, rate-limiting, CORS, and metrics
+> middleware are applied to the served HTTP app. With `require_auth: true` (the
+> default) the server **fails fast at startup** when no key is configured (see
+> *First Run* below); once a key is set, every request to the MCP endpoint must
+> carry a valid key and keyless requests are rejected at runtime with `401`.
+> `/health` and `/metrics` are exempt. **stdio mode is unaffected** (local
+> transport, no auth).
 
 ### First Run
 
@@ -233,11 +233,6 @@ keys are rejected at config load time:
 
 ### Making Authenticated Requests
 
-> **Note:** this is the request format clients will use once per-request
-> enforcement is wired to the served endpoint in **Phase 3 (REF-07)** — see the
-> *Known limitation* note above. Today the server does not yet reject keyless
-> requests at runtime.
-
 Clients send the **plain** key (not the digest); the server hashes it and
 compares digests in constant time. Three header forms are accepted:
 
@@ -247,8 +242,8 @@ curl -H "X-API-Key: YOUR-KEY" http://localhost:8815/netops-mcp
 curl -H "API-Key: YOUR-KEY" http://localhost:8815/netops-mcp
 ```
 
-`/health` and `/metrics` are exempt paths in the auth middleware (relevant once
-the middleware is wired to the served app in Phase 3).
+`/health` and `/metrics` are exempt paths in the auth middleware — they are
+reachable without a key; every other path requires one.
 
 ### Opting Out (NOT recommended)
 
@@ -464,23 +459,72 @@ pytest tests/ --cov=src --cov-report=html --cov-report=term-missing
 
 ### Environment Variables
 
-```bash
-# Server configuration
-NETOPS_MCP_HOST=0.0.0.0
-NETOPS_MCP_PORT=8815
-NETOPS_MCP_LOG_LEVEL=INFO
+Only five environment variables are read by the code or the startup script.
+Everything else is configured **exclusively** in the JSON config file — setting
+those as environment variables has no effect (see `env.production.example`).
 
-# Tool timeouts
-PING_TIMEOUT=10
-TRACEROUTE_TIMEOUT=30
-MTR_TIMEOUT=30
-CURL_TIMEOUT=30
-NMAP_TIMEOUT=300
+```bash
+# Forwarded by start_http_server.sh as --host/--port/--path CLI flags
+HTTP_HOST=0.0.0.0
+HTTP_PORT=8815
+HTTP_PATH=/netops-mcp
+
+# Path to the JSON config file (used when --config is omitted)
+NETOPS_MCP_CONFIG=config/config.json
+
+# Line-buffered stdout for container logs
+PYTHONUNBUFFERED=1
 ```
+
+### Config / Env Reference
+
+Every configuration key, its type, default, environment override (if any), and
+effect. This table is **derived from the Pydantic models** in
+`src/netops_mcp/config/models.py` and is regenerable with
+`python scripts/gen_config_table.py` — so it cannot drift from the code.
+
+| Key | Type | Default | Env override | Effect |
+| --- | --- | --- | --- | --- |
+| `logging.level` | `str` | `"INFO"` |  | Log verbosity (DEBUG / INFO / WARNING / ERROR). |
+| `logging.format` | `str` | `"%(asctime)s - %(name)s - %(levelname)s - %(message)s"` |  | Python logging format string. |
+| `logging.file` | `Optional[str]` | `None` |  | Log file path (None = console only). |
+| `security.allow_privileged_commands` | `bool` | `False` |  | Enable privileged scans (nmap -sS/-O); default off returns 'disabled by config'. |
+| `security.allow_loopback` | `bool` | `False` |  | Allow requests to loopback addresses (127.0.0.0/8, ::1). |
+| `security.allow_link_local` | `bool` | `False` |  | Allow link-local addresses (169.254.0.0/16, fe80::/10). |
+| `security.allow_private` | `bool` | `True` |  | Allow private / LAN address ranges (RFC 1918). |
+| `security.block_metadata` | `bool` | `True` |  | Block cloud metadata endpoints (169.254.169.254, fd00:ec2::254). |
+| `security.allowed_hosts` | `list[str]` | `[]` |  | TrustedHost allow-list for the HTTP server (empty = all). |
+| `security.rate_limit_requests` | `int` | `100` |  | Max requests per window per client. |
+| `security.rate_limit_window` | `int` | `60` |  | Rate-limit window in seconds. |
+| `security.require_auth` | `bool` | `True` |  | Require an API key for HTTP mode; without one the server fails fast at startup. |
+| `security.api_keys` | `list[str]` | `[]` |  | Accepted API keys as 'sha256:<64-hex>' digests only. |
+| `security.enable_cors` | `bool` | `False` |  | Enable the CORS middleware. |
+| `security.cors_origins` | `list[str]` | `[]` |  | Explicit allowed origins (wildcard '*' plus credentials is rejected at load). |
+| `security.cors_allow_credentials` | `bool` | `False` |  | Send Access-Control-Allow-Credentials. |
+| `network.default_timeout` | `int` | `30` |  | Default per-command timeout (seconds). |
+| `network.max_retries` | `int` | `3` |  | Max retries for retryable operations. |
+| `network.ping_count` | `int` | `4` |  | Default ping packet count. |
+| `network.traceroute_max_hops` | `int` | `30` |  | Default traceroute max hops. |
+| `network.nmap_scan_timeout` | `int` | `300` |  | Default nmap scan timeout (seconds). |
+| `network.max_scan_timeout` | `int` | `300` |  | Upper bound for scan timeouts (seconds). |
+| `network.allowed_ports` | `str` | `"1-65535"` |  | Permitted port-range specification. |
+| `server.host` | `str` | `"0.0.0.0"` | `HTTP_HOST` | HTTP bind address. |
+| `server.port` | `int` | `8815` | `HTTP_PORT` | HTTP listen port. |
+| `server.path` | `str` | `"/netops-mcp"` | `HTTP_PATH` | MCP endpoint path. |
+| `custom_settings` | `dict[str, Any]` | `{}` |  | Free-form user settings (not validated). |
+| — | `str (path)` | `config/config.json` | `NETOPS_MCP_CONFIG` | Path to the JSON config file loaded at startup (used when --config is omitted). |
+| — | `str` | `1` | `PYTHONUNBUFFERED` | Line-buffered stdout/stderr for container logs. |
 
 ### Configuration File
 
-The server will automatically create a default configuration file from `config/config.example.json` on first run, or you can create `config/config.json` manually:
+`config/config.json` is loaded when present; otherwise the server runs on the
+in-memory defaults shown above. It is **not** auto-created by the server — only
+`./start_http_server.sh` creates one, by copying `config/config.example.json`
+to `config/config.json`. That example ships with `require_auth: true` and an
+empty `api_keys` list, so a freshly-copied config makes the HTTP server **fail
+fast** until you add a key (see
+[Authentication](#-authentication-breaking-change)). You can also create
+`config/config.json` manually:
 
 ```json
 {
@@ -583,7 +627,7 @@ curl -X POST http://localhost:8815/netops-mcp \
 ### Network Security
 
 - **Firewall Rules**: Configure appropriate firewall rules for the server port
-- **Access Control**: HTTP mode fails fast on a keyless start by default (`require_auth: true`). Note that per-request API-key enforcement on the served endpoint lands in Phase 3 (REF-07) — see the *Known limitation* note under [Authentication](#-authentication-breaking-change)
+- **Access Control**: HTTP mode fails fast on a keyless start by default (`require_auth: true`), and the served endpoint enforces per-request API-key authentication — keyless requests are rejected with `401` (see [Authentication](#-authentication-breaking-change))
 - **Network Isolation**: Run in isolated network environments when possible
 
 ### Tool Security
@@ -638,9 +682,8 @@ curl -X POST http://localhost:8815/netops-mcp \
 
 HTTP mode **refuses to start without a key by default** (`require_auth: true`),
 and the server stores and compares only `sha256:` digests — clients send the
-plain key. Note that **per-request enforcement on the served endpoint is not yet
-active** (lands in Phase 3 / REF-07); see the *Known limitation* note. Full
-details (key generation, hashing, opt-out) are in
+plain key, which the served endpoint enforces on every request. Full details
+(key generation, hashing, opt-out) are in
 [Authentication](#-authentication-breaking-change):
 
 ```bash
@@ -679,23 +722,17 @@ server {
 - ✅ **Non-Root User**: Runs as unprivileged user in container
 - ✅ **Resource Limits**: Configurable CPU and memory limits
 - ✅ **Auth Startup Gate**: HTTP mode fails fast on a keyless start (`require_auth: true`)
-
-The following are implemented and configurable but are **not yet wired to the
-served HTTP app** — enforcement lands in **Phase 3 (REF-07)** (see the *Known
-limitation* note under [Authentication](#-authentication-breaking-change)):
-
-- 🔜 **Per-request API Key Authentication**: Bearer / X-API-Key / API-Key headers
-- 🔜 **Rate Limiting**: Built-in rate limiting (100 req/min default)
-- 🔜 **Health Checks**: `/health` and `/metrics` endpoints
-- 🔜 **CORS Support**: Configurable CORS for web applications
-- 🔜 **Security Headers**: Automatic security headers
+- ✅ **Per-request API Key Authentication**: Bearer / X-API-Key / API-Key headers, enforced on the served endpoint
+- ✅ **Rate Limiting**: Built-in rate limiting (100 req/min default)
+- ✅ **Health Checks**: `/health` and `/metrics` endpoints (auth-exempt)
+- ✅ **CORS Support**: Configurable CORS for web applications
 
 ### CI/CD Pipeline
 
 GitHub Actions workflows included:
 - **Tests**: Automated testing on Python 3.10, 3.11, 3.12
 - **Linting**: Code quality checks (Black, Ruff, mypy)
-- **Security**: Security scanning (Bandit, Safety, Trivy)
+- **Security**: Security scanning (Bandit, pip-audit, Trivy)
 - **Release**: Automated Docker image publishing to GitHub Container Registry
 
 ### Documentation

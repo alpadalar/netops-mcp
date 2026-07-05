@@ -190,3 +190,10 @@ coverage.xml
 .claude/
 .impeccable/
 CLAUDE.md
+get-shit-done/
+.codex/
+.cursor/
+.agents/
+
+# Local runtime config (untracked — REL-09; ships as config/config.example.json)
+config/config.json

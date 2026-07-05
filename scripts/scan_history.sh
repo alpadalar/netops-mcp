@@ -75,8 +75,14 @@ done
 # ---------------------------------------------------------------------------
 # 2. Targeted secret patterns over the full-history diff (all refs)
 # ---------------------------------------------------------------------------
-section "Targeted secret patterns (git log -p --all)"
-DIFF_ALL="$(git log -p --all)"
+# The scanner's OWN definition files (this script + .gitleaks.toml) contain the
+# secret-pattern literals it searches for. Once committed, an unfiltered
+# `git log -p --all` would match those literals and flag the scanner as a
+# "secret" (self-reference). Exclude the two definition files from the diff —
+# the standard "a scanner ignores its own signatures" practice. Everything else
+# (src, tests, docs, config, uv.lock, README) is still fully scanned.
+section "Targeted secret patterns (git log -p --all, excluding scanner defs)"
+DIFF_ALL="$(git log -p --all -- . ':!scripts/scan_history.sh' ':!.gitleaks.toml')"
 
 check_pattern() {
     local label="$1" regex="$2" hits

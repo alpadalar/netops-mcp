@@ -61,7 +61,7 @@ jobs:
         platforms: linux/amd64,linux/arm64
     
     - name: Run Trivy vulnerability scanner on image
-      uses: aquasecurity/trivy-action@0.28.0
+      uses: aquasecurity/trivy-action@v0.36.0
       # Security reporting is best-effort and must never block the Release: a
       # Trivy hiccup here would otherwise flip success() false and skip the
       # create-release step below (CR-01). continue-on-error keeps the step's

@@ -216,6 +216,61 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3b. Merge-safe blob sweep (IN-01) — entry-path-independent
+# ---------------------------------------------------------------------------
+# The diff baseline above uses `git log -p --all`, which omits merge-commit diffs
+# by default. A secret introduced ONLY in a merge-conflict resolution — present
+# in the merge tree but in neither parent's non-merge diff — is therefore
+# invisible to the diff baseline (this history carries 27 merge commits). This
+# sweep reads every BLOB object in the object graph directly, regardless of how
+# it entered history (normal commit, merge resolution, dangling), and greps the
+# high-confidence, ALLOWLIST-FREE provider-token / private-key patterns over the
+# raw content. Only patterns with a negligible benign-collision rate are used
+# here — the sha256 / bearer allowlist logic stays on the diff baseline, where
+# per-token neutralization is possible. The object graph is small (hundreds of
+# blobs), so this adds no meaningful runtime. Fails closed like every other stage.
+section "Merge-safe blob sweep (all blob objects, IN-01)"
+BLOB_SECRET_RE='AKIA[0-9A-Z]{16}|gh[posu]_[A-Za-z0-9]{36}|xox[baprs]-[0-9A-Za-z-]{10,}|AIza[0-9A-Za-z_-]{35}|BEGIN (RSA|OPENSSH|EC|DSA|PGP|PRIVATE) '
+BLOB_SHAS="$(mktemp)"
+BLOB_DUMP="$(mktemp)"
+trap 'rm -f "${BLOB_SHAS:-}" "${BLOB_DUMP:-}"' EXIT
+
+# Enumerate unique blob object SHAs only (batch-check is content-free and fast).
+git rev-list --all --objects \
+    | awk '{print $1}' \
+    | git cat-file --batch-check='%(objectname) %(objecttype)' \
+    | awk '$2 == "blob" {print $1}' \
+    | sort -u > "$BLOB_SHAS"
+for st in "${PIPESTATUS[@]}"; do
+    if [ "$st" -ge 2 ]; then
+        printf 'FATAL: blob enumeration error (git rc %s) — failing closed\n' "$st" >&2
+        exit 2
+    fi
+done
+
+# Stream the raw content of exactly those blobs and scan it.
+git cat-file --batch < "$BLOB_SHAS" > "$BLOB_DUMP" 2>/dev/null; rc=$?
+if [ "$rc" -ge 2 ]; then
+    printf 'FATAL: blob content read error (git rc %s) — failing closed\n' "$rc" >&2
+    exit 2
+fi
+
+n_blobs=$(grep -c . "$BLOB_SHAS"); n_blobs=${n_blobs:-0}
+blob_hits_list=$(grep -aiE "$BLOB_SECRET_RE" "$BLOB_DUMP"); rc=$?
+if [ "$rc" -ge 2 ]; then
+    printf 'FATAL: blob sweep grep error — failing closed\n' >&2
+    exit 2
+fi
+blob_hits=$(printf '%s' "$blob_hits_list" | grep -c .); blob_hits=${blob_hits:-0}
+if [ "$blob_hits" -ne 0 ]; then
+    printf 'FINDING: %s provider-token/private-key hit(s) in raw blob objects (merge-safe):\n' "$blob_hits"
+    printf '%s\n' "$blob_hits_list" | head -20
+    FINDINGS=$((FINDINGS + 1))
+else
+    printf 'ok: blob sweep clean (%s blob object(s), no provider-token/private-key match)\n' "$n_blobs"
+fi
+
+# ---------------------------------------------------------------------------
 # 4. Scanner augmentation (optional — patterned baseline above is authoritative)
 # ---------------------------------------------------------------------------
 section "Scanner augmentation (optional)"

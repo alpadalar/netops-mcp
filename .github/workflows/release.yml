@@ -59,6 +59,10 @@ jobs:
           type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
           type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
           type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
+        # :latest only moves on real tag pushes; manually dispatching an older
+        # tag must not roll the :latest image back in the registry.
+        flavor: |
+          latest=${{ github.event_name == 'push' }}
     
     - name: Build and push Docker image
       uses: docker/build-push-action@v7

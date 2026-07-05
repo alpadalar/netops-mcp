@@ -2,10 +2,25 @@
 Comprehensive tests for HTTP tools functionality.
 """
 
+import inspect
+import os
+import stat
+import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
+
+import netops_mcp.tools.network.http_tools as http_tools_module
 import pytest
-import json
-from unittest.mock import patch, MagicMock
 from netops_mcp.tools.network.http_tools import HTTPTools
+
+
+def _find_url(command):
+    """Locate the request URL inside a built curl/api argv."""
+    return next(
+        arg for arg in command
+        if isinstance(arg, str) and arg.startswith(("http://", "https://"))
+    )
 
 
 class TestHTTPTools:
@@ -372,7 +387,254 @@ class TestHTTPTools:
         }
         
         result = self.http_tools.curl_request("https://example.com", timeout=5)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert "timeout" in result[0].text.lower() or "error" in result[0].text.lower()
+
+    # ------------------------------------------------------------------
+    # SEC-02 / TEST-03: per-request tempfile + concurrency isolation
+    # ------------------------------------------------------------------
+
+    def test_curl_request_tempfile_mode_0600_and_cleanup(self, mock_execute_command):
+        """curl_request writes to a per-request 0600 tempfile, reads it back,
+        and unlinks it in finally (no shared /tmp/curl_output)."""
+        captured = {}
+
+        def fake_exec(command, timeout=0):
+            out_path = command[command.index("-o") + 1]
+            captured["path"] = out_path
+            captured["mode"] = stat.S_IMODE(os.stat(out_path).st_mode)
+            with open(out_path, "w") as fh:
+                fh.write("body-data-marker")
+            return {
+                "success": True,
+                "stdout": '{"http_code": "200"}',
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        mock_execute_command.side_effect = fake_exec
+
+        result = self.http_tools.curl_request("https://example.com")
+
+        assert captured["mode"] == 0o600
+        assert "body-data-marker" in result[0].text
+        # finally cleanup: the private tempfile must be gone after the call
+        assert not os.path.exists(captured["path"])
+
+    def test_curl_request_tempfile_cleanup_on_failure(self, mock_execute_command):
+        """The per-request mkstemp tempfile is unlinked even when the command
+        reports failure (finally cleanup on the error branch)."""
+        created = []
+        real_mkstemp = tempfile.mkstemp
+
+        def spy_mkstemp(*args, **kwargs):
+            fd, path = real_mkstemp(*args, **kwargs)
+            created.append(path)
+            return fd, path
+
+        mock_execute_command.return_value = {
+            "success": False,
+            "stdout": "",
+            "stderr": "boom",
+            "return_code": 1,
+        }
+
+        with patch(
+            "netops_mcp.tools.network.http_tools.tempfile.mkstemp",
+            side_effect=spy_mkstemp,
+        ):
+            self.http_tools.curl_request("https://example.com")
+
+        assert created, "curl_request must create a per-request tempfile via mkstemp"
+        for path in created:
+            assert not os.path.exists(path)
+
+    def test_no_shared_tmp_paths_in_source(self):
+        """The hardcoded shared /tmp curl output paths must be gone (SEC-02)."""
+        source = inspect.getsource(http_tools_module)
+        # Strip comment lines before scanning for the shared literals.
+        code = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "/tmp/curl_output" not in code
+        assert "/tmp/api_response" not in code
+
+    def test_curl_request_concurrent_no_cross_contamination(self, mock_execute_command):
+        """N concurrent curl_request calls each read back only their own body.
+        A shared output path would cross-contaminate under the race window."""
+        urls = [f"https://example.com/req-{i}" for i in range(12)]
+
+        def fake_exec(command, timeout=0):
+            out_path = command[command.index("-o") + 1]
+            url = _find_url(command)
+            # Bracket the marker so one url is never a substring of another
+            # (e.g. req-1 vs req-10).
+            with open(out_path, "w") as fh:
+                fh.write(f"[BODY-FOR::{url}]")
+            # Widen the race window so a shared path deterministically clobbers.
+            time.sleep(0.02)
+            return {
+                "success": True,
+                "stdout": '{"http_code": "200"}',
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        mock_execute_command.side_effect = fake_exec
+
+        def run(u):
+            res = self.http_tools.curl_request(u)
+            return u, res[0].text
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = list(executor.map(run, urls))
+
+        for url, text in results:
+            assert f"[BODY-FOR::{url}]" in text, f"missing own body for {url}"
+            for other in urls:
+                if other != url:
+                    assert f"[BODY-FOR::{other}]" not in text, (
+                        f"cross-contamination: {other} leaked into {url}"
+                    )
+
+    def test_api_test_concurrent_no_cross_contamination(self, mock_execute_command):
+        """N concurrent api_test calls each read back only their own body."""
+        urls = [f"https://example.com/api-{i}" for i in range(12)]
+
+        def fake_exec(command, timeout=0):
+            out_path = command[command.index("-o") + 1]
+            url = _find_url(command)
+            # Bracket the marker so one url is never a substring of another.
+            with open(out_path, "w") as fh:
+                fh.write(f"[BODY-FOR::{url}]")
+            time.sleep(0.02)
+            return {
+                "success": True,
+                "stdout": "200",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+        mock_execute_command.side_effect = fake_exec
+
+        def run(u):
+            res = self.http_tools.api_test(u)
+            return u, res[0].text
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            results = list(executor.map(run, urls))
+
+        for url, text in results:
+            assert f"[BODY-FOR::{url}]" in text, f"missing own body for {url}"
+            for other in urls:
+                if other != url:
+                    assert f"[BODY-FOR::{other}]" not in text, (
+                        f"cross-contamination: {other} leaked into {url}"
+                    )
+
+    # ------------------------------------------------------------------
+    # SEC-03 / TEST-04: curl IP-pin + redirect-off (redirect-to-metadata)
+    # ------------------------------------------------------------------
+
+    def test_curl_command_pins_ip_and_disables_redirects(self):
+        """Built curl argv pins the classified IP via --resolve (port 443 for
+        https), sets --max-redirs 0, and never adds -L (TEST-04)."""
+        command = self.http_tools._format_curl_command(
+            "https://example.com/path",
+            "GET",
+            out_path="/tmp/ignored",
+            resolved_ips=["93.184.216.34"],
+        )
+        assert "--resolve" in command
+        assert command[command.index("--resolve") + 1] == "example.com:443:93.184.216.34"
+        assert "--max-redirs" in command
+        assert command[command.index("--max-redirs") + 1] == "0"
+        assert "-L" not in command
+
+    def test_curl_command_http_scheme_pins_port_80(self):
+        """http:// URLs pin port 80 in --resolve (Pitfall 7)."""
+        command = self.http_tools._format_curl_command(
+            "http://example.com/x",
+            "GET",
+            out_path="/tmp/ignored",
+            resolved_ips=["93.184.216.34"],
+        )
+        assert command[command.index("--resolve") + 1] == "example.com:80:93.184.216.34"
+
+    def test_curl_command_explicit_port_pins_that_port(self):
+        """An explicit URL port is used verbatim in --resolve."""
+        command = self.http_tools._format_curl_command(
+            "https://example.com:8443/x",
+            "GET",
+            out_path="/tmp/ignored",
+            resolved_ips=["10.0.0.5"],
+        )
+        assert command[command.index("--resolve") + 1] == "example.com:8443:10.0.0.5"
+
+    def test_curl_request_pins_resolved_ip(self, mock_execute_command, sample_curl_output):
+        """curl_request pins the SSRF-classified IP and disables redirects."""
+        mock_execute_command.return_value = sample_curl_output
+
+        self.http_tools.curl_request("https://example.com/get")
+
+        call_args = mock_execute_command.call_args[0][0]
+        assert "--resolve" in call_args
+        assert call_args[call_args.index("--resolve") + 1] == "example.com:443:93.184.216.34"
+        assert "--max-redirs" in call_args
+        assert call_args[call_args.index("--max-redirs") + 1] == "0"
+        assert "-L" not in call_args
+
+    def test_api_test_pins_resolved_ip(self, mock_execute_command, sample_curl_output):
+        """api_test pins the SSRF-classified IP and disables redirects."""
+        mock_execute_command.return_value = sample_curl_output
+
+        self.http_tools.api_test("https://example.com/status/200")
+
+        call_args = mock_execute_command.call_args[0][0]
+        assert "--resolve" in call_args
+        assert call_args[call_args.index("--resolve") + 1] == "example.com:443:93.184.216.34"
+        assert "--max-redirs" in call_args
+        assert "-L" not in call_args
+
+    def test_curl_request_blocks_loopback(self, mock_execute_command):
+        """A loopback URL is blocked by SSRF classification (fail-closed);
+        curl is never executed."""
+        result = self.http_tools.curl_request("http://127.0.0.1:8080/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_curl_request_blocks_metadata(self, mock_execute_command):
+        """A cloud-metadata URL (169.254.169.254) is blocked before curl runs."""
+        result = self.http_tools.curl_request("http://169.254.169.254/latest/meta-data/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_api_test_blocks_loopback(self, mock_execute_command):
+        """api_test blocks a loopback URL before executing curl."""
+        result = self.http_tools.api_test("http://127.0.0.1:9000/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_httpie_request_blocks_metadata(self, mock_execute_command):
+        """httpie_request SSRF-classifies the host and blocks metadata
+        (un-pinned caveat, but classification gate still fires)."""
+        result = self.http_tools.httpie_request("http://169.254.169.254/")
+
+        assert '"error": true' in result[0].text
+        mock_execute_command.assert_not_called()
+
+    def test_validate_url_delegates_to_central_validator(self):
+        """_validate_url stays bool-equivalent after delegating to the central
+        validate_url (REF-02)."""
+        assert self.http_tools._validate_url("https://example.com") is True
+        assert self.http_tools._validate_url("http://localhost:8080") is True
+        assert self.http_tools._validate_url("https://api.github.com/v1/users") is True
+        assert self.http_tools._validate_url("") is False
+        assert self.http_tools._validate_url(None) is False
+        assert self.http_tools._validate_url("not-a-url") is False
+        assert self.http_tools._validate_url("ftp://example.com") is False

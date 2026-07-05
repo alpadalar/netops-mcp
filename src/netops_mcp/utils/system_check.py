@@ -33,6 +33,33 @@ def _run(command: List[str], **kwargs: Any) -> subprocess.CompletedProcess:
     return subprocess.run(command, stdin=subprocess.DEVNULL, **kwargs)
 
 
+# Per-tool version/availability probe argv. Tools whose probe flag differs from
+# the generic `--version` are listed explicitly; every other tool falls through
+# to the `[tool_name, '--version']` default in _get_tool_check_command.
+_TOOL_CHECK_COMMANDS: Dict[str, List[str]] = {
+    'curl': ['curl', '--version'],
+    'nmap': ['nmap', '--version'],
+    'ping': ['ping', '-V'],
+    'nc': ['nc', '-h'],
+    'nslookup': ['nslookup', '-version'],
+    'dig': ['dig', '-v'],
+    'host': ['host', '-V'],
+    'arping': ['arping', '-V'],
+    'http': ['http', '--version'],
+}
+
+
+def _get_tool_check_command(tool_name: str) -> List[str]:
+    """Return the argv used to probe a tool's availability/version.
+
+    REF-06: single source for the tool-probe dispatch previously duplicated
+    byte-for-byte across is_tool_available and get_tool_version. Unknown tools
+    fall back to `[tool_name, '--version']`, matching the historical `else`
+    branch of both if/elif chains — behavior is unchanged.
+    """
+    return _TOOL_CHECK_COMMANDS.get(tool_name, [tool_name, '--version'])
+
+
 def check_required_tools(tools: List[str] = None) -> Dict[str, Any]:
     """Check if required system tools are available.
 
@@ -72,36 +99,8 @@ def is_tool_available(tool_name: str) -> bool:
     """
     try:
         # Try to get version information to check availability
-        if tool_name == 'curl':
-            result = _run(['curl', '--version'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'nmap':
-            result = _run(['nmap', '--version'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'ping':
-            result = _run(['ping', '-V'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'nc':
-            result = _run(['nc', '-h'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'nslookup':
-            result = _run(['nslookup', '-version'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'dig':
-            result = _run(['dig', '-v'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'host':
-            result = _run(['host', '-V'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'arping':
-            result = _run(['arping', '-V'],
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'http':
-            result = _run(['http', '--version'],
-                                  capture_output=True, text=True, timeout=5)
-        else:
-            result = _run([tool_name, '--version'],
-                                  capture_output=True, text=True, timeout=5)
+        result = _run(_get_tool_check_command(tool_name),
+                      capture_output=True, text=True, timeout=5)
 
         return result.returncode == 0
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError, subprocess.SubprocessError):
@@ -118,36 +117,8 @@ def get_tool_version(tool_name: str) -> str:
         Version string or "Unknown" if not available
     """
     try:
-        if tool_name == 'curl':
-            result = _run(['curl', '--version'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'nmap':
-            result = _run(['nmap', '--version'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'ping':
-            result = _run(['ping', '-V'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'nc':
-            result = _run(['nc', '-h'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'nslookup':
-            result = _run(['nslookup', '-version'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'dig':
-            result = _run(['dig', '-v'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'host':
-            result = _run(['host', '-V'], 
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'arping':
-            result = _run(['arping', '-V'],
-                                  capture_output=True, text=True, timeout=5)
-        elif tool_name == 'http':
-            result = _run(['http', '--version'],
-                                  capture_output=True, text=True, timeout=5)
-        else:
-            result = _run([tool_name, '--version'],
-                                  capture_output=True, text=True, timeout=5)
+        result = _run(_get_tool_check_command(tool_name),
+                      capture_output=True, text=True, timeout=5)
 
         if result.returncode == 0:
             version_line = result.stdout.split('\n')[0]

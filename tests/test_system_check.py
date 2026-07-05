@@ -16,7 +16,8 @@ from netops_mcp.utils.system_check import (
     get_network_interfaces,
     get_disk_usage,
     get_memory_info,
-    get_cpu_info
+    get_cpu_info,
+    _get_tool_check_command,
 )
 
 
@@ -353,6 +354,24 @@ class TestSystemCheck:
 
         assert version == "3.2.4"
         assert mock_run.call_args[0][0] == ['http', '--version']
+
+    def test_get_tool_check_command_dispatch(self):
+        """REF-06: _get_tool_check_command is the single dispatch source.
+
+        Locks the representative argv preserved from the two former if/elif
+        chains, including the generic `--version` fallback for unknown tools.
+        """
+        assert _get_tool_check_command('curl') == ['curl', '--version']
+        assert _get_tool_check_command('ping') == ['ping', '-V']
+        assert _get_tool_check_command('http') == ['http', '--version']
+        assert _get_tool_check_command('nc') == ['nc', '-h']
+        assert _get_tool_check_command('nslookup') == ['nslookup', '-version']
+        assert _get_tool_check_command('dig') == ['dig', '-v']
+        assert _get_tool_check_command('host') == ['host', '-V']
+        assert _get_tool_check_command('arping') == ['arping', '-V']
+        assert _get_tool_check_command('nmap') == ['nmap', '--version']
+        # Unknown tools fall back to the generic --version probe.
+        assert _get_tool_check_command('foobar') == ['foobar', '--version']
 
     def test_system_info_structure(self):
         """Test that system info has the correct structure."""

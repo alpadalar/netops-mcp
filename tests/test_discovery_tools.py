@@ -253,6 +253,58 @@ class TestDiscoveryTools:
             argv = mock_execute.call_args.args[0]
             assert target in argv
 
+    # ------------------------------------------------------------------
+    # IN-01: nmap_scan / service_discovery now gate the ports argument via the
+    # central validate_port_range, matching port_scan / service_enumeration.
+    # ------------------------------------------------------------------
+    def test_nmap_scan_invalid_ports_rejected(self):
+        """A malformed ports spec is rejected before nmap runs."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.nmap_scan(
+                "8.8.8.8", ports="bad_ports", scan_type="basic"
+            )
+
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    def test_service_discovery_invalid_ports_rejected(self):
+        """service_discovery rejects a malformed ports spec before nmap runs."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.service_discovery("8.8.8.8", ports="bad_ports")
+
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    @pytest.mark.parametrize("ports", ["22,80,443", "1-1000"])
+    def test_nmap_scan_valid_ports_proceed(self, ports):
+        """A well-formed ports spec is NOT over-blocked and reaches the scan."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Nmap scan report for test-host",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+            result = self.discovery_tools.nmap_scan(
+                "8.8.8.8", ports=ports, scan_type="basic"
+            )
+
+            assert "Nmap scan report" in result[0].text
+            mock_execute.assert_called_once()
+
+    @pytest.mark.parametrize("valid_ports,invalid_ports", [
+        (["80", "443", "22,80,443", "1-100", "80-443"],
+         ["", None, "invalid_ports", "abc", "999999", "0", "65536"]),
+    ])
+    def test_validate_ports(self, valid_ports, invalid_ports):
+        """DiscoveryTools._validate_ports delegates to central validate_port_range."""
+        for ports in valid_ports:
+            assert self.discovery_tools._validate_ports(ports) == True
+
+        for ports in invalid_ports:
+            assert self.discovery_tools._validate_ports(ports) == False
+
     @pytest.mark.parametrize("host,scan_type", [
         ("google.com", "invalid_scan_type"),
         ("google.com", ""),

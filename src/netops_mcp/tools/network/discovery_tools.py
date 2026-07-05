@@ -22,9 +22,36 @@ class DiscoveryTools(NetOpsTool):
         """
         if not scan_type or not isinstance(scan_type, str):
             return False
-        
+
         valid_scan_types = ['basic', 'quick', 'full']
         return scan_type.lower() in valid_scan_types
+
+    def _validate_ports(self, ports: str) -> bool:
+        """Validate a port specification via the central validate_port_range
+        (IN-01 symmetry with ScanningTools).
+
+        Keeps the ``-> bool`` contract: True for a well-formed port spec
+        ("22,80,443", "1-1000"), False otherwise. Not shell-injectable (the
+        command is an argv list), so this is defense-in-depth / clearer errors,
+        applying the same guard the other two nmap sinks (port_scan /
+        service_enumeration) already use.
+
+        Args:
+            ports: Port specification to validate
+
+        Returns:
+            True if the ports specification is valid
+        """
+        from ...validators.input_validator import (
+            ValidationError,
+            validate_port_range,
+        )
+
+        try:
+            validate_port_range(ports)
+            return True
+        except ValidationError:
+            return False
 
     def nmap_scan(self, target: str, ports: Optional[str] = None, scan_type: str = "basic", timeout: int = 300) -> List[Content]:
         """Scan network using nmap.
@@ -63,6 +90,11 @@ class DiscoveryTools(NetOpsTool):
                     f"Scan type '{scan_type}' uses privileged nmap flags (-sS/-O) which are "
                     "disabled by config (security.allow_privileged_commands=false)."
                 )
+
+            # IN-01: gate the port spec (defense-in-depth + clearer errors),
+            # matching the guard port_scan / service_enumeration already apply.
+            if ports and not self._validate_ports(ports):
+                raise ValueError("Invalid ports specification provided")
 
             # Build nmap command based on scan type
             if scan_type == "basic":
@@ -121,6 +153,11 @@ class DiscoveryTools(NetOpsTool):
             # uses -sV -sC (connect scan) so it is NOT privileged-gated. WR-02:
             # a plain hostname returns pinned resolved IP(s) handed to nmap below.
             pinned = self._enforce_ssrf_scan_target(target)
+
+            # IN-01: gate the port spec (defense-in-depth + clearer errors),
+            # matching the guard port_scan / service_enumeration already apply.
+            if ports and not self._validate_ports(ports):
+                raise ValueError("Invalid ports specification provided")
 
             # Use nmap for service discovery
             command = ['nmap', '-sV', '-sC', '--version-intensity', '5']

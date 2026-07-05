@@ -183,22 +183,85 @@ class TestConnectivityTools:
         assert hasattr(self.connectivity_tools, '_execute_command')
 
     @pytest.mark.parametrize("host", [
-        "google.com",
-        "8.8.8.8",
-        "192.168.1.1",
-        "localhost",
-        "127.0.0.1"
+        "google.com",   # conftest stub -> 93.184.216.34 (global, allowed)
+        "8.8.8.8",      # global, allowed
+        "192.168.1.1",  # private/LAN, allowed by default (allow_private=True)
     ])
     def test_ping_host_valid_hosts(self, host, mock_execute_command, sample_ping_output):
-        """Test ping with various valid hosts."""
+        """Test ping with various valid (non-loopback) hosts.
+
+        SEC-03: loopback ("localhost"/"127.0.0.1") is now blocked by the default
+        SSRF policy, so it was moved out of this success list into
+        test_ping_host_loopback_blocked (the sanctioned Pitfall-3 breakage).
+        """
         mock_execute_command.return_value = sample_ping_output
-        
+
         result = self.connectivity_tools.ping_host(host)
-        
+
         assert len(result) == 1
         assert result[0].type == "text"
         assert host in result[0].text
         assert "ping" in result[0].text.lower()
+
+    @pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+    def test_ping_host_loopback_blocked(self, host, mock_execute_command, sample_ping_output):
+        """SEC-03 (Pitfall 3): the default SSRF policy blocks loopback targets.
+
+        "localhost" resolves (offline) to 127.0.0.1 and the literal is a loopback
+        address; both are classified loopback and rejected with a blocked-error
+        envelope BEFORE the subprocess runs. The command mock is wired but must
+        never be invoked.
+        """
+        mock_execute_command.return_value = sample_ping_output
+
+        result = self.connectivity_tools.ping_host(host)
+        data = json.loads(result[0].text)
+
+        assert data["error"] is True
+        assert "loopback" in data["message"].lower()
+        mock_execute_command.assert_not_called()
+
+    def test_ping_host_loopback_allowed_with_opt_in(self, mock_execute_command,
+                                                    sample_ping_output):
+        """SEC-03 opt-out: allow_loopback=True lets operators diagnose localhost.
+
+        Constructing ConnectivityTools with a Config whose security.allow_loopback
+        is True permits the loopback target to reach the subprocess again.
+        """
+        from netops_mcp.config.models import Config, SecurityConfig
+
+        config = Config(security=SecurityConfig(allow_loopback=True))
+        tools = ConnectivityTools(config)
+        mock_execute_command.return_value = sample_ping_output
+
+        result = tools.ping_host("127.0.0.1")
+
+        assert len(result) == 1
+        assert result[0].type == "text"
+        assert "127.0.0.1" in result[0].text
+        mock_execute_command.assert_called_once()
+
+    def test_connectivity_tools_block_loopback_target(self, mock_execute_command,
+                                                      sample_ping_output):
+        """SEC-03: every connection-target tool classifies its host.
+
+        traceroute/mtr take a bare target; telnet/netcat take host+port (the port
+        is threaded into _enforce_ssrf). All four reject the loopback literal with
+        a blocked-error envelope before the subprocess runs.
+        """
+        mock_execute_command.return_value = sample_ping_output
+
+        for result in (
+            self.connectivity_tools.traceroute_path("127.0.0.1"),
+            self.connectivity_tools.mtr_monitor("127.0.0.1"),
+            self.connectivity_tools.telnet_connect("127.0.0.1", 80),
+            self.connectivity_tools.netcat_test("127.0.0.1", 80),
+        ):
+            data = json.loads(result[0].text)
+            assert data["error"] is True
+            assert "loopback" in data["message"].lower()
+
+        mock_execute_command.assert_not_called()
 
     def test_ping_host_with_custom_count(self, mock_execute_command, sample_ping_output):
         """Test ping with custom packet count."""

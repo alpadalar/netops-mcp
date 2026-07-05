@@ -13,6 +13,8 @@ import subprocess
 from typing import Any, Dict, List, Optional, Union
 from mcp.types import TextContent as Content
 
+from ..config.models import Config, SecurityConfig
+
 
 class NetOpsTool:
     """Base class for NetOps MCP tools.
@@ -24,9 +26,18 @@ class NetOpsTool:
     - Subprocess execution
     """
 
-    def __init__(self):
-        """Initialize the tool."""
+    def __init__(self, config: Optional[Config] = None) -> None:
+        """Initialize the tool.
+
+        Args:
+            config: Optional server configuration. When ``None`` (the direct
+                construction path used by tool tests) the tool inherits a
+                secure-by-default ``SecurityConfig``: loopback and link-local
+                (incl. cloud metadata) are blocked, private/LAN is allowed, and
+                privileged commands are off.
+        """
         self.logger = logging.getLogger(f"netops-mcp.{self.__class__.__name__.lower()}")
+        self._security: SecurityConfig = config.security if config else SecurityConfig()
 
     def _format_response(self, data: Any, tool_name: Optional[str] = None) -> List[Content]:
         """Format response data into MCP content.

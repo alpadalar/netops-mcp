@@ -14,6 +14,10 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Tag being released: the pushed tag on tag-push events, or the `tag` input
+  # on manual dispatch. Previously the input was declared but never read, so
+  # dispatch silently pushed branch-tagged images and skipped the Release.
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   build-and-push:
@@ -26,7 +30,12 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
-    
+      with:
+        # On manual dispatch, build from the tag being released rather than
+        # the branch head; on tag push this is github.ref (the tag), i.e.
+        # identical to the previous default behavior.
+        ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
     
@@ -42,10 +51,14 @@ jobs:
       uses: docker/metadata-action@v6
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        # value= derives the semver tags from RELEASE_TAG so a manual dispatch
+        # of tag X yields the same version tags (and meta.outputs.version) as
+        # pushing tag X; on tag pushes RELEASE_TAG equals github.ref_name, so
+        # the output is unchanged from the previous ref-derived behavior.
         tags: |
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
+          type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
+          type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
           type=ref,event=branch
           type=sha,prefix={{branch}}-
     
@@ -83,8 +96,12 @@ jobs:
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v3
-      if: startsWith(github.ref, 'refs/tags/')
+      # Runs on tag pushes and on manual dispatch: tag_name points the Release
+      # at RELEASE_TAG, so dispatching with an existing tag X creates the same
+      # Release that pushing tag X would have created.
+      if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
       with:
+        tag_name: ${{ env.RELEASE_TAG }}
         generate_release_notes: true
         draft: false
         prerelease: false

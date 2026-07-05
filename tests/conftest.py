@@ -382,6 +382,52 @@ def test_urls():
 
 
 # ---------------------------------------------------------------------------
+# SSRF resolver stub (SEC-03 / TEST-04 offline determinism)
+#
+# The SSRF classifier resolves host/URL inputs via socket.getaddrinfo before
+# classifying with ipaddress. To keep the whole tool-test suite offline and
+# deterministic, this autouse fixture intercepts the handful of benign test
+# DOMAIN names and maps them to a fixed GLOBAL IP (93.184.216.34). IP literals
+# and numeric encodings (decimal/hex/octal) are NOT intercepted — they fall
+# through to the real (offline) getaddrinfo so the TEST-04 corpus exercises
+# genuine glibc inet_aton normalization rather than a stub. Patching
+# socket.getaddrinfo (not input_validator._resolve) keeps this robust before
+# the classifier lands (_resolve does not exist during the red-first phase).
+# ---------------------------------------------------------------------------
+import socket as _socket_mod  # noqa: E402
+
+_SSRF_STUB_GLOBAL_IP = "93.184.216.34"
+_SSRF_TEST_DOMAINS = {
+    "example.com",
+    "google.com",
+    "httpbin.org",
+    "api.github.com",
+}
+_REAL_GETADDRINFO = _socket_mod.getaddrinfo
+
+
+@pytest.fixture(autouse=True)
+def stub_ssrf_resolver():
+    """Map benign test domains -> a fixed global IP; delegate all other hosts
+    (IP literals, numeric encodings, loopback/localhost) to the real offline
+    getaddrinfo so the SSRF corpus still normalizes and classifies for real."""
+
+    def fake_getaddrinfo(host, port, *args, **kwargs):
+        if host in _SSRF_TEST_DOMAINS:
+            return [(
+                _socket_mod.AF_INET,
+                _socket_mod.SOCK_STREAM,
+                _socket_mod.IPPROTO_TCP,
+                "",
+                (_SSRF_STUB_GLOBAL_IP, port or 0),
+            )]
+        return _REAL_GETADDRINFO(host, port, *args, **kwargs)
+
+    with patch("socket.getaddrinfo", side_effect=fake_getaddrinfo):
+        yield
+
+
+# ---------------------------------------------------------------------------
 # Live-uvicorn E2E harness (TEST-02 / REF-07)
 #
 # A real ephemeral-port uvicorn server driving

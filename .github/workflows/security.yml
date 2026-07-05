@@ -48,9 +48,20 @@ jobs:
         path: bandit-report.json
     
     - name: Run pip-audit (dependency vulnerability check)
+      # ADVISORY BY DESIGN: this step reports transitive dependency
+      # vulnerabilities but does NOT gate CI. The locked dependency tree
+      # (fastmcp, starlette, cryptography, urllib3, werkzeug, ...) currently
+      # carries several upstream CVEs with no fixed release compatible with our
+      # pinned stack, so a hard gate would red every build for issues we cannot
+      # remediate here. The JSON report is uploaded as an artifact for triage.
+      # NOTE: --strict is intentionally omitted -- combined with the trailing
+      # `|| true` and continue-on-error it would be silently negated and only
+      # imply a gate that does not exist. Revisit and promote to a real gate
+      # (drop `|| true` and continue-on-error, add --strict) once the tree is
+      # clean.
       run: |
         source .venv/bin/activate
-        pip-audit --strict --format json --output pip-audit-report.json || true
+        pip-audit --format json --output pip-audit-report.json || true
       continue-on-error: true
 
     - name: Upload pip-audit report

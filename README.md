@@ -659,8 +659,9 @@ services:
     ports:
       - "8815:8815"
     environment:
-      - NETOPS_MCP_HOST=0.0.0.0
-      - NETOPS_MCP_PORT=8815
+      - HTTP_HOST=0.0.0.0
+      - HTTP_PORT=8815
+      - HTTP_PATH=/netops-mcp
     volumes:
       - ./logs:/app/logs
       - ./config:/app/config

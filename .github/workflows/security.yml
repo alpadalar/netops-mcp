@@ -32,7 +32,7 @@ jobs:
         uv venv
         source .venv/bin/activate
         uv pip install -e ".[dev]"
-        uv pip install bandit safety
+        uv pip install bandit pip-audit
     
     - name: Run Bandit (security linter)
       run: |
@@ -47,21 +47,21 @@ jobs:
         name: bandit-security-report
         path: bandit-report.json
     
-    - name: Run Safety (dependency vulnerability check)
+    - name: Run pip-audit (dependency vulnerability check)
       run: |
         source .venv/bin/activate
-        safety check --json --output safety-report.json
+        pip-audit --strict --format json --output pip-audit-report.json || true
       continue-on-error: true
-    
-    - name: Upload Safety report
+
+    - name: Upload pip-audit report
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: safety-vulnerability-report
-        path: safety-report.json
-    
+        name: pip-audit-vulnerability-report
+        path: pip-audit-report.json
+
     - name: Run Trivy vulnerability scanner (filesystem)
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.28.0
       with:
         scan-type: 'fs'
         scan-ref: '.'

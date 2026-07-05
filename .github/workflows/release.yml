@@ -19,8 +19,9 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required by softprops/action-gh-release to create the Release
-      packages: write
+      contents: write         # softprops/action-gh-release — create the Release
+      packages: write         # push image to GHCR
+      security-events: write  # codeql-action/upload-sarif — publish Trivy SARIF
     
     steps:
     - name: Checkout code
@@ -61,17 +62,25 @@ jobs:
     
     - name: Run Trivy vulnerability scanner on image
       uses: aquasecurity/trivy-action@0.28.0
+      # Security reporting is best-effort and must never block the Release: a
+      # Trivy hiccup here would otherwise flip success() false and skip the
+      # create-release step below (CR-01). continue-on-error keeps the step's
+      # conclusion 'success' so the tagged Release is still created.
+      continue-on-error: true
       with:
         image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
         format: 'sarif'
         output: 'trivy-image-results.sarif'
-    
+
     - name: Upload Trivy results to GitHub Security
       uses: github/codeql-action/upload-sarif@v3
       if: always()
+      # Best-effort (see above): a SARIF upload failure (e.g. transient
+      # code-scanning API error) must not fail the job and skip create-release.
+      continue-on-error: true
       with:
         sarif_file: 'trivy-image-results.sarif'
-    
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')

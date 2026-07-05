@@ -44,8 +44,10 @@ class DiscoveryTools(NetOpsTool):
             # 127.0.0.0/8) is expanded and every covered address classified; an
             # unresolvable host fails CLOSED, so octet-range targets can no longer
             # slip past the loopback/link-local/metadata block via resolver
-            # fail-open.
-            self._enforce_ssrf_scan_target(target)
+            # fail-open. WR-02: for a plain hostname this returns the pinned
+            # resolved IP(s) handed to nmap below so nmap cannot re-resolve to a
+            # DNS-rebind target; range/CIDR/literal targets return None.
+            pinned = self._enforce_ssrf_scan_target(target)
 
             if not self._validate_scan_type(scan_type):
                 raise ValueError("Invalid scan type provided")
@@ -75,10 +77,16 @@ class DiscoveryTools(NetOpsTool):
             # Add port specification
             if ports:
                 command.extend(['-p', ports])
-            
-            # Add target
-            command.append(target)
-            
+
+            # Add target: hand nmap the pinned resolved IP(s) for a plain
+            # hostname (WR-02, defeats nmap's independent re-resolution /
+            # DNS-rebind); pass literal/range/CIDR targets through unchanged. The
+            # response below still reports the original `target` string.
+            if pinned:
+                command.extend(pinned)
+            else:
+                command.append(target)
+
             result = self._execute_command(command, timeout)
             
             response_data = {
@@ -110,17 +118,23 @@ class DiscoveryTools(NetOpsTool):
             # SEC-03 / CR-01: range-aware validate + SSRF-classify the scan
             # target (fails CLOSED on unresolvable; expands nmap range/CIDR
             # syntax and classifies every covered address). service_discovery
-            # uses -sV -sC (connect scan) so it is NOT privileged-gated.
-            self._enforce_ssrf_scan_target(target)
+            # uses -sV -sC (connect scan) so it is NOT privileged-gated. WR-02:
+            # a plain hostname returns pinned resolved IP(s) handed to nmap below.
+            pinned = self._enforce_ssrf_scan_target(target)
 
             # Use nmap for service discovery
             command = ['nmap', '-sV', '-sC', '--version-intensity', '5']
-            
+
             if ports:
                 command.extend(['-p', ports])
-            
-            command.append(target)
-            
+
+            # Add target: pinned resolved IP(s) for a plain hostname (WR-02),
+            # else the original literal/range/CIDR target passed through.
+            if pinned:
+                command.extend(pinned)
+            else:
+                command.append(target)
+
             result = self._execute_command(command, 180)
             
             response_data = {

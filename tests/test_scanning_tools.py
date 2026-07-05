@@ -266,3 +266,62 @@ class TestScanningTools:
 
             assert "error" in result[0].text.lower()
             mock_execute.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # WR-02: for a plain hostname the argv handed to nmap must be the pinned
+    # resolved IP (classified here), not the name — so nmap cannot re-resolve
+    # the name to a DNS-rebind target. example.com resolves to the fixed global
+    # 93.184.216.34 via the offline conftest SSRF resolver stub.
+    # ------------------------------------------------------------------
+    def test_port_scan_pins_resolved_ip_for_hostname(self):
+        """port_scan hands nmap the pinned resolved IP, not the hostname."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Port scan results",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+            self.scanning_tools.port_scan("example.com", "80")
+
+            argv = mock_execute.call_args.args[0]
+            assert "93.184.216.34" in argv
+            assert "example.com" not in argv
+
+    def test_service_enumeration_pins_resolved_ip_for_hostname(self):
+        """service_enumeration hands nmap the pinned resolved IP, not the name."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Service enumeration results",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+            self.scanning_tools.service_enumeration("example.com")
+
+            argv = mock_execute.call_args.args[0]
+            assert "93.184.216.34" in argv
+            assert "example.com" not in argv
+
+    @pytest.mark.parametrize("target", [
+        "8.8.8.8",          # single global literal
+        "192.168.1.0/24",   # private CIDR
+        "10.0.0.1-50",      # private octet range
+    ])
+    def test_port_scan_literal_range_target_not_pinned(self, target):
+        """Literal / range / CIDR targets are passed through to nmap unchanged
+        (nmap never re-resolves numeric syntax, so there is nothing to pin)."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Port scan results",
+                "stderr": "",
+                "return_code": 0,
+            }
+
+            self.scanning_tools.port_scan(target, "80")
+
+            argv = mock_execute.call_args.args[0]
+            assert target in argv

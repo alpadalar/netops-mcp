@@ -231,7 +231,7 @@ class NetOpsTool:
         except _socket.gaierror:
             return []
 
-    def _enforce_ssrf_scan_target(self, target: str) -> None:
+    def _enforce_ssrf_scan_target(self, target: str) -> Optional[List[str]]:
         """Validate + SSRF-classify an nmap-family SCAN target (SEC-03 / CR-01).
 
         Unlike ``_enforce_ssrf`` (single connection target, fail-OPEN on an
@@ -247,13 +247,20 @@ class NetOpsTool:
         Args:
             target: The scan target (host, IP literal, or nmap range/CIDR)
 
+        Returns:
+            For a plain hostname (or IPv6 literal), the deduped list of
+            resolved+classified IP strings — callers hand THESE to nmap instead
+            of the name so nmap cannot re-resolve to a DNS-rebind target (WR-02).
+            None for a range / CIDR / dotted-quad-literal target, which is passed
+            through to nmap unchanged (nmap never re-resolves numeric syntax).
+
         Raises:
             ValidationError: on a malformed target, a blocked category, or an
                 unresolvable plain hostname
         """
         from ..validators.input_validator import enforce_ssrf_scan_target
 
-        enforce_ssrf_scan_target(target, self._security)
+        return enforce_ssrf_scan_target(target, self._security)
 
     def _enforce_ssrf_url(self, url: str) -> list:
         """SSRF-classify an HTTP URL target and return the pinned IP list.

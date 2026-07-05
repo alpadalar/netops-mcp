@@ -222,7 +222,7 @@ def _enforce_scan_network(host: str, net: _IPNetwork, policy: SecurityConfig) ->
             raise ValidationError(f"{host} covers blocked network {blocked}")
 
 
-def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
+def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> Optional[List[str]]:
     """Validate + SSRF-enforce an nmap-family SCAN target (SEC-03 / CR-01).
 
     Scan targets differ from single connection targets (``enforce_ssrf``) in two
@@ -239,8 +239,16 @@ def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
          diagnostic ping-family fail-OPEN posture: a scan target that will not
          resolve must not silently proceed to the nmap subprocess.
 
+    Return contract (WR-02 DNS-rebind pin):
+      * For a PLAIN HOSTNAME (or IPv6 literal), returns the deduped, ordered list
+        of resolved+classified IP strings. Callers hand THESE to nmap instead of
+        the name so nmap cannot independently re-resolve the hostname to a
+        DNS-rebind target (127.0.0.1 / IMDS) after it passed classification.
+      * For a range / CIDR / dotted-quad-literal target, returns None — nmap
+        never re-resolves numeric syntax, so it is passed through unchanged.
+
     Raises ``ValidationError`` on a malformed target, a blocked category, or an
-    unresolvable plain hostname. Returns None when the target is safe to scan.
+    unresolvable plain hostname.
     """
     if not target or not isinstance(target, str):
         raise ValidationError("Scan target must be a non-empty string")
@@ -253,7 +261,7 @@ def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
         except ValueError as exc:
             raise ValidationError(f"Invalid CIDR scan target: {target}") from exc
         _enforce_scan_network(target, net, policy)
-        return
+        return None
 
     # Dotted-quad numeric syntax (single literal, per-octet range / wildcard /
     # comma list): expand and classify offline, no DNS.
@@ -266,7 +274,7 @@ def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
             for combo in itertools.product(*octet_sets):
                 addr = ".".join(str(part) for part in combo)
                 _apply_policy(target, ipaddress.IPv4Address(addr), policy)
-            return
+            return None
         first = ipaddress.IPv4Address(
             ".".join(str(min(values)) for values in octet_sets)
         )
@@ -275,7 +283,7 @@ def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
         )
         for net in ipaddress.summarize_address_range(first, last):
             _enforce_scan_network(target, net, policy)
-        return
+        return None
 
     # Plain hostname or IPv6 literal: format-check, then resolve-and-classify.
     # SCAN tools fail CLOSED on an unresolvable name (distinct from the
@@ -285,11 +293,19 @@ def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
     except ValidationError:
         validate_ip_address(target)
     try:
-        enforce_ssrf(target, policy)
+        ips = enforce_ssrf(target, policy)
     except socket.gaierror as exc:
         raise ValidationError(
             f"scan target '{target}' does not resolve; scan tools fail closed"
         ) from exc
+    # WR-02: return the RESOLVED+classified IP(s) so the caller pins nmap to the
+    # address it just classified rather than the name. nmap re-resolves a plain
+    # hostname on its own, so a name that first resolves to a global IP (passing
+    # classification) could rebind to 127.0.0.1 / 169.254.169.254 before nmap's
+    # own lookup — the same DNS-rebind class as the httpie residual. An
+    # IP-literal input round-trips unchanged (str(ip) == the literal). Deduped,
+    # insertion-order preserved.
+    return list(dict.fromkeys(str(ip) for ip in ips))
 
 
 def validate_hostname(hostname: str, allow_localhost: bool = True) -> str:

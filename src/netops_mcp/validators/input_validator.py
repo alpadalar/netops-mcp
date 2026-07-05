@@ -374,7 +374,7 @@ def validate_ip_address(ip: str, allow_private: bool = True, allow_localhost: bo
     try:
         ip_obj = ipaddress.ip_address(ip)
     except ValueError as e:
-        raise ValidationError(f"Invalid IP address: {e}")
+        raise ValidationError(f"Invalid IP address: {e}") from e
 
     if not allow_private and ip_obj.is_private:
         raise ValidationError("Private IP addresses not allowed")
@@ -432,7 +432,7 @@ def validate_url(url: str, allowed_schemes: Optional[list] = None) -> str:
     try:
         parsed = urlparse(url)
     except Exception as e:
-        raise ValidationError(f"Invalid URL format: {e}")
+        raise ValidationError(f"Invalid URL format: {e}") from e
 
     if not parsed.scheme:
         raise ValidationError("URL must have a scheme (http:// or https://)")
@@ -575,13 +575,13 @@ def validate_port_range(port_range: str) -> str:
                 if start_port > end_port:
                     raise ValidationError(f"Invalid port range: {part} (start > end)")
             except ValueError:
-                raise ValidationError(f"Invalid port range format: {part}")
+                raise ValidationError(f"Invalid port range format: {part}") from None
         else:
             # Single port
             try:
                 validate_port(int(part))
             except ValueError:
-                raise ValidationError(f"Invalid port number: {part}")
+                raise ValidationError(f"Invalid port number: {part}") from None
 
     return port_range
 

@@ -34,9 +34,9 @@ def load_config(config_path: Optional[str] = None) -> Config:
                 config_data = json.load(f)
                 return Config(**config_data)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in config file: {e}")
+            raise ValueError(f"Invalid JSON in config file: {e}") from e
         except Exception as e:
-            raise ValueError(f"Failed to load config: {e}")
+            raise ValueError(f"Failed to load config: {e}") from e
 
     # Otherwise, use default configuration
     return Config()

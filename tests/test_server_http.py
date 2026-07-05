@@ -156,10 +156,10 @@ class TestNetOpsMCPHTTPServer:
         """Test error handling during server initialization."""
         # Test with invalid config that would cause issues
         with patch("netops_mcp.server_http.load_config") as mock_load_config:
-            mock_load_config.side_effect = Exception("Config error")
+            mock_load_config.side_effect = RuntimeError("Config error")
 
             # Should handle the error gracefully
-            with pytest.raises(Exception):
+            with pytest.raises(RuntimeError, match="Config error"):
                 NetOpsMCPHTTPServer()
 
     def test_main_function(self):

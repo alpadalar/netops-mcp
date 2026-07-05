@@ -19,7 +19,6 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -97,7 +96,12 @@ filterwarnings = [
 ]
 
 [tool.mypy]
-python_version = "3.9"
+# REL-08: bumped 3.9 -> 3.10 to match requires-python (>=3.10). Fixes the fatal
+# "Pattern matching is only supported in Python 3.10 and greater" parse error the
+# mcp/fastmcp SDK's match statements trigger under py39. mypy stays ADVISORY in CI
+# (continue-on-error) — the ~95 pre-existing strict errors are out of the frozen-
+# behavior release scope and are not addressed here.
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -110,12 +114,41 @@ warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
 
+# REL-08: mcp/fastmcp ship no py.typed / are match-statement heavy; skip following
+# their imports so advisory mypy focuses on this project's own code.
+[[tool.mypy.overrides]]
+module = ["mcp.*", "fastmcp.*"]
+follow_imports = "skip"
+
 [tool.ruff]
 select = ["E", "F", "B", "I"]
 ignore = []
 line-length = 100
-target-version = "py39"
+target-version = "py310"
+# REL-08: orphan test scripts at repo root are out of lint scope and are removed
+# in plan 05-06; exclude them so `ruff check .` reflects the maintained surface.
+extend-exclude = ["test_all_tools.py", "test_scripts"]
+
+[tool.ruff.per-file-ignores]
+# REL-08 accept-and-document: these residuals are behavior-frozen and not worth a
+# risky reflow/restructure for a format-only release-quality pass.
+# E402 — deliberate `sys.path.insert(...)` before imports so tests import from src/.
+# E501 — long lines that black declined to reflow; in metrics.py reflowing the
+#        Prometheus export strings would risk the byte-exact contract (test_metrics.py).
+"tests/conftest.py" = ["E402", "E501"]
+"tests/test_basic.py" = ["E402"]
+"tests/test_tools.py" = ["E402", "E501"]
+"scripts/generate_api_key.py" = ["E402"]
+"src/netops_mcp/middleware/metrics.py" = ["E501"]
+"src/netops_mcp/middleware/auth.py" = ["E501"]
 
 [tool.black]
 line-length = 100
-target-version = ['py39']
+target-version = ['py310']
+# REL-08: keep orphan root scripts (removed in 05-06) out of the format gate.
+extend-exclude = '''
+/(
+    test_all_tools\.py
+  | test_scripts
+)/?
+'''

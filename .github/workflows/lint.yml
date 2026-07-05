@@ -28,7 +28,7 @@ jobs:
       run: |
         uv venv
         source .venv/bin/activate
-        uv pip install -e ".[dev]"
+        uv sync --locked --extra dev
     
     - name: Run Black (code formatting check)
       run: |

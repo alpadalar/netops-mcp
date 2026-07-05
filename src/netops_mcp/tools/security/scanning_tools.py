@@ -2,7 +2,6 @@
 Security scanning tools for NetOps MCP.
 """
 
-import re
 from typing import Dict, List, Optional
 from mcp.types import TextContent as Content
 from ..base import NetOpsTool
@@ -12,7 +11,13 @@ class ScanningTools(NetOpsTool):
     """Tools for security scanning and enumeration."""
 
     def _validate_ports(self, ports: str) -> bool:
-        """Validate port specification.
+        """Validate port specification by delegating to the central
+        validate_port_range (REF-02).
+
+        Keeps the historical ``-> bool`` contract: True for a well-formed port
+        spec ("22,80,443", "1-1000"), False otherwise. The ad-hoc regex is gone
+        — port-spec format is now a single source of truth in
+        ``validators/input_validator.py``.
 
         Args:
             ports: Port specification to validate
@@ -20,35 +25,16 @@ class ScanningTools(NetOpsTool):
         Returns:
             True if ports specification is valid
         """
-        if not ports or not isinstance(ports, str):
+        from ...validators.input_validator import (
+            ValidationError,
+            validate_port_range,
+        )
+
+        try:
+            validate_port_range(ports)
+            return True
+        except ValidationError:
             return False
-        
-        # Check for common port patterns
-        port_pattern = re.compile(r'^(\d+(-\d+)?)(,\d+(-\d+)?)*$')
-        if not port_pattern.match(ports):
-            return False
-        
-        # Validate individual port numbers
-        parts = ports.split(',')
-        for part in parts:
-            if '-' in part:
-                start, end = part.split('-')
-                try:
-                    start_port = int(start)
-                    end_port = int(end)
-                    if start_port > end_port or start_port < 1 or end_port > 65535:
-                        return False
-                except ValueError:
-                    return False
-            else:
-                try:
-                    port = int(part)
-                    if port < 1 or port > 65535:
-                        return False
-                except ValueError:
-                    return False
-        
-        return True
 
     def port_scan(self, target: str, ports: str, timeout: int = 60) -> List[Content]:
         """Scan ports on a target.
@@ -64,7 +50,12 @@ class ScanningTools(NetOpsTool):
         try:
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
-            
+
+            # SEC-03: SSRF-classify the scan target (loopback/link-local blocked
+            # by default; private/global allowed). port_scan uses -sT (connect
+            # scan) so it is NOT privileged-gated per the two-layer ruling.
+            self._enforce_ssrf(target)
+
             if not self._validate_ports(ports):
                 raise ValueError("Invalid ports specification provided")
 
@@ -99,7 +90,11 @@ class ScanningTools(NetOpsTool):
         try:
             if not self._validate_host(target):
                 raise ValueError("Invalid target provided")
-            
+
+            # SEC-03: SSRF-classify the target. service_enumeration uses -sV -sC
+            # (connect scan) so it is NOT privileged-gated per the two-layer ruling.
+            self._enforce_ssrf(target)
+
             if ports and not self._validate_ports(ports):
                 raise ValueError("Invalid ports specification provided")
 

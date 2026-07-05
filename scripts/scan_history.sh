@@ -96,8 +96,16 @@ done
 # only pattern that used to self-match the scanner's source (the redundant PEM
 # filename check) has been removed (it was fully covered by the private-key
 # block pattern below), so no whole-file self-exclusion is needed.
+#
+# Strip git diff hunk-header lines (`@@ -a,b +c,d @@ <context>`): git copies a
+# nearby line into the header as context and TRUNCATES it to a fixed width. That
+# truncation can chop an allowlisted digest (or a uv.lock package hash) mid-hash,
+# producing a prefix token that the per-token allowlist no longer recognizes — a
+# false positive. Hunk headers are pure metadata; their context is always
+# duplicated in full as a +/context line in the hunk body, so dropping them is
+# lossless for real-secret detection.
 section "Targeted secret patterns (git log -p --all, full tree)"
-DIFF_ALL="$(git log -p --all -- .)"
+DIFF_ALL="$(git log -p --all -- . | sed '/^@@/d')"
 
 check_pattern() {
     local label="$1" regex="$2" hits

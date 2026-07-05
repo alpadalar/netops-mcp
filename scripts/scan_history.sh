@@ -109,16 +109,22 @@ check_pattern "Google API key (AIza...)"     'AIza[0-9A-Za-z_-]{35}'
 # here: it would self-match the private-key-block check and fail this gate.
 
 # Real bearer tokens on ADDED lines, excluding documented placeholders.
+# The placeholder allowlist is anchored to the TOKEN (the value right after
+# "Bearer "), not to the whole line (WR-02): a line whose bearer value is a real
+# token but which also happens to contain a benign word like "example" elsewhere
+# (e.g. a trailing "# example config" comment) must still be flagged.
+BEARER_DETECT='^\+.*Bearer [A-Za-z0-9_.-]{20,}'
+BEARER_PLACEHOLDER='Bearer (YOUR|EXAMPLE|XXXX|PLACEHOLDER|CHANGEME|<|\.\.\.)'
 section "Real bearer tokens (added lines, excluding placeholders)"
 bearer_hits=$(printf '%s\n' "$DIFF_ALL" \
-    | grep -iE '^\+.*Bearer [A-Za-z0-9_.-]{20,}' 2>/dev/null \
-    | grep -viE 'YOUR|EXAMPLE|<[^>]*>|xxxx|\.\.\.|placeholder' 2>/dev/null \
+    | grep -iE "$BEARER_DETECT" 2>/dev/null \
+    | grep -viE "$BEARER_PLACEHOLDER" 2>/dev/null \
     | wc -l | tr -d ' ')
 bearer_hits=${bearer_hits:-0}
 if [ "$bearer_hits" -ne 0 ]; then
     printf 'FINDING: real bearer token(s): %s\n' "$bearer_hits"
-    printf '%s\n' "$DIFF_ALL" | grep -iE '^\+.*Bearer [A-Za-z0-9_.-]{20,}' \
-        | grep -viE 'YOUR|EXAMPLE|<[^>]*>|xxxx|\.\.\.|placeholder' | head -10
+    printf '%s\n' "$DIFF_ALL" | grep -iE "$BEARER_DETECT" \
+        | grep -viE "$BEARER_PLACEHOLDER" | head -10
     FINDINGS=$((FINDINGS + 1))
 else
     printf 'ok: real bearer tokens 0\n'
@@ -128,24 +134,34 @@ fi
 # 3. High-entropy sha256 triage — every hit must be allowlisted
 # ---------------------------------------------------------------------------
 section "High-entropy sha256 triage (allowlist: uv.lock hashes + README example)"
-# Any sha256:<hex> that is NOT a uv.lock package-integrity hash
-# (files.pythonhosted.org) and NOT the README example digest is a finding.
-UNEXPECTED_SHA=$(printf '%s\n' "$DIFF_ALL" \
+# Allowlist PER TOKEN, not per line (WR-02). A naive `grep -v` of any line that
+# mentions files.pythonhosted.org or the README digest would silently drop a
+# real secret co-located on the same line. Instead:
+#   1. neutralize only the genuine uv.lock package-hash token — recognized by
+#      the structured `url = "https://files.pythonhosted.org/...",
+#      hash = "sha256:<hex>"` shape (a bare mention of the URL is NOT enough);
+#   2. extract every remaining sha256 token individually (grep -oiE);
+#   3. drop only the exact README example-digest token.
+# Anything left is a finding, even if it shared a line with a benign hash.
+# Residual (documented): a secret injected into the exact structured uv.lock
+# url+hash position is still trusted — the same public-lockfile assumption the
+# .gitleaks.toml `^uv\.lock$` path allowlist already makes.
+UVLOCK_HASH_STRUCT='url = "https://files\.pythonhosted\.org/[^"]*", hash = "sha256:[a-f0-9]{16,}"'
+UNEXPECTED_SHA_LIST=$(printf '%s\n' "$DIFF_ALL" \
     | grep -iE 'sha256:[a-f0-9]{16,}' 2>/dev/null \
-    | grep -vF 'files.pythonhosted.org' 2>/dev/null \
-    | grep -vF "$README_EXAMPLE_DIGEST" 2>/dev/null \
-    | wc -l | tr -d ' ')
+    | sed -E "s#${UVLOCK_HASH_STRUCT}#UVLOCK_PKG_HASH#g" \
+    | grep -oiE 'sha256:[a-f0-9]{16,}' 2>/dev/null \
+    | grep -viF "$README_EXAMPLE_DIGEST" 2>/dev/null)
+UNEXPECTED_SHA=$(printf '%s' "$UNEXPECTED_SHA_LIST" | grep -c . )
 UNEXPECTED_SHA=${UNEXPECTED_SHA:-0}
-TOTAL_SHA=$(printf '%s\n' "$DIFF_ALL" | count_matches 'sha256:[a-f0-9]{16,}')
+TOTAL_SHA=$(printf '%s\n' "$DIFF_ALL" | grep -oiE 'sha256:[a-f0-9]{16,}' 2>/dev/null | grep -c .)
 TOTAL_SHA=${TOTAL_SHA:-0}
 if [ "$UNEXPECTED_SHA" -ne 0 ]; then
-    printf 'FINDING: %s sha256 hit(s) outside the uv.lock/README allowlist:\n' "$UNEXPECTED_SHA"
-    printf '%s\n' "$DIFF_ALL" | grep -iE 'sha256:[a-f0-9]{16,}' \
-        | grep -vF 'files.pythonhosted.org' \
-        | grep -vF "$README_EXAMPLE_DIGEST" | head -20
+    printf 'FINDING: %s sha256 token(s) outside the uv.lock/README allowlist:\n' "$UNEXPECTED_SHA"
+    printf '%s\n' "$UNEXPECTED_SHA_LIST" | head -20
     FINDINGS=$((FINDINGS + 1))
 else
-    printf 'ok: all %s sha256 hit(s) allowlisted (uv.lock package hashes + README example digest)\n' "$TOTAL_SHA"
+    printf 'ok: all %s sha256 token(s) allowlisted (uv.lock package hashes + README example digest)\n' "$TOTAL_SHA"
 fi
 
 # ---------------------------------------------------------------------------

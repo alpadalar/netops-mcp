@@ -231,7 +231,7 @@ The application executes system commands:
 - **GitHub Actions**: Automated security scanning on every push
 - **Trivy**: Container image vulnerability scanning
 - **Bandit**: Python security linter
-- **Safety**: Dependency vulnerability checking
+- **pip-audit**: Dependency vulnerability checking
 
 ### Manual Updates
 
@@ -242,7 +242,7 @@ Check for security updates regularly:
 uv pip list --outdated
 
 # Security audit
-safety check
+pip-audit
 
 # Scan for vulnerabilities
 bandit -r src/

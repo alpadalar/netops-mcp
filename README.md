@@ -292,6 +292,97 @@ at config load time:
 CORS middleware. Setting `cors_allow_credentials: true` while `cors_origins`
 contains a wildcard (`"*"`) fails config validation.
 
+## 🔌 MCP Client Configuration
+
+NetOps MCP speaks two transports: **stdio** (the client launches the server as a
+subprocess — simplest, no auth) and **HTTP** (a long-running server — requires an
+API key by default). For HTTP, generate a key first (see
+[Authentication](#-authentication-breaking-change)); clients send the **plain**
+key in a header — the server stores only its `sha256:` digest. Any of the three
+header forms works: `Authorization: Bearer <key>`, `X-API-Key: <key>`, or
+`API-Key: <key>`.
+
+### Claude Desktop (stdio)
+
+Edit `claude_desktop_config.json` (macOS:
+`~/Library/Application Support/Claude/`, Windows: `%APPDATA%\Claude\`):
+
+```json
+{
+  "mcpServers": {
+    "netops-mcp": {
+      "command": "uv",
+      "args": ["run", "netops-mcp"],
+      "cwd": "/absolute/path/to/NetOpsMCP"
+    }
+  }
+}
+```
+
+### Claude Code (stdio)
+
+Add a project-scoped server from the repo root (writes `.mcp.json`):
+
+```bash
+claude mcp add netops-mcp -- uv run netops-mcp
+```
+
+### Claude Code (HTTP + API key)
+
+Point Claude Code at a running HTTP server, passing the plain key as a header:
+
+```bash
+claude mcp add --transport http netops-mcp http://localhost:8815/netops-mcp \
+  --header "X-API-Key: YOUR-KEY"
+```
+
+Equivalent `.mcp.json` entry:
+
+```json
+{
+  "mcpServers": {
+    "netops-mcp": {
+      "type": "http",
+      "url": "http://localhost:8815/netops-mcp",
+      "headers": { "X-API-Key": "YOUR-KEY" }
+    }
+  }
+}
+```
+
+### Cursor
+
+Edit `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global). stdio:
+
+```json
+{
+  "mcpServers": {
+    "netops-mcp": {
+      "command": "uv",
+      "args": ["run", "netops-mcp"],
+      "cwd": "/absolute/path/to/NetOpsMCP"
+    }
+  }
+}
+```
+
+HTTP + API key (server must already be running on port `8815`):
+
+```json
+{
+  "mcpServers": {
+    "netops-mcp": {
+      "url": "http://localhost:8815/netops-mcp",
+      "headers": { "X-API-Key": "YOUR-KEY" }
+    }
+  }
+}
+```
+
+> Replace `YOUR-KEY` with a plain key from
+> `python scripts/generate_api_key.py` and add its `sha256:` digest to
+> `security.api_keys` in the config the server loads.
+
 ## 📖 API Reference
 
 ### Network Connectivity
@@ -642,6 +733,20 @@ curl -X POST http://localhost:8815/netops-mcp \
 - **Error Handling**: Comprehensive error handling and logging
 - **Timeout Management**: Configurable timeouts for all operations
 - **Resource Limits**: Built-in resource usage limits
+
+### Responsible Use (Network Scanning)
+
+> **⚠️ Legal notice.** The scanning tools (`nmap_scan`, `port_scan`,
+> `service_enumeration`) and other active probes can be interpreted as hostile
+> activity and may be **illegal without authorization**.
+>
+> - Only scan networks and hosts you **own or have explicit permission** to scan.
+> - Some jurisdictions have laws against unauthorized network scanning, and ISP
+>   acceptable-use policies may prohibit it.
+> - Document and communicate intended use; keep logging and audit trails.
+>
+> You are solely responsible for how you use these tools. See
+> [SECURITY.md](SECURITY.md) for the full security policy and threat model.
 
 ## 🚀 Production Deployment
 

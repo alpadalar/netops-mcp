@@ -19,7 +19,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # required by softprops/action-gh-release to create the Release
       packages: write
     
     steps:

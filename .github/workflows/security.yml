@@ -31,11 +31,17 @@ jobs:
         echo "$HOME/.local/bin" >> "$GITHUB_PATH"
     
     - name: Create virtual environment and install dependencies
+      # Install the LOCKED dependency tree (same command as lint.yml/test.yml)
+      # so bandit and pip-audit scan exactly what uv.lock ships rather than a
+      # fresh unpinned resolution -- the pip-audit advisory comment below
+      # refers to the locked tree. bandit comes from the locked dev extra;
+      # pip-audit is not a project dependency, so it is installed separately
+      # with a pinned version to keep scanner findings reproducible.
       run: |
         uv venv
         source .venv/bin/activate
-        uv pip install -e ".[dev]"
-        uv pip install bandit pip-audit
+        uv sync --locked --extra dev
+        uv pip install pip-audit==2.10.1
     
     - name: Run Bandit (security linter)
       run: |

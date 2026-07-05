@@ -12,7 +12,10 @@ on:
 jobs:
   security-scan:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read          # checkout
+      security-events: write  # codeql-action/upload-sarif — publish Trivy SARIF
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4

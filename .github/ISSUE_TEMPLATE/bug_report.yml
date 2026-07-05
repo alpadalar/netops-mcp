@@ -1,0 +1,139 @@
+name: Bug Report
+description: Report a reproducible problem with a NetOpsMCP tool or the server
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in the
+        fields below so we can reproduce the problem quickly.
+
+        **Security note:** if this is a security vulnerability, do **not** open a
+        public issue — follow the private process in
+        [SECURITY.md](../blob/main/SECURITY.md) instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: When I call ping_host with ..., the server returns ...
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: OS and version (NetOpsMCP supports Linux/macOS only).
+      placeholder: "Ubuntu 24.04 / macOS 14.5"
+    validations:
+      required: true
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      description: Output of `python --version` (NetOpsMCP requires >= 3.10).
+      placeholder: "3.11.9"
+    validations:
+      required: true
+  - type: input
+    id: netops_version
+    attributes:
+      label: NetOpsMCP version
+      description: Release tag or git commit you are running.
+      placeholder: "v0.1.0 / commit abc1234"
+    validations:
+      required: false
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      description: Which transport were you running?
+      options:
+        - stdio
+        - HTTP
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      description: Which client was connected to the server?
+      options:
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - Other (describe in "What happened?")
+    validations:
+      required: true
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Affected tool
+      description: Which of the 26 tools is affected? Choose "Not tool-specific" for server/transport issues.
+      options:
+        - Not tool-specific / other
+        - api_test
+        - arp_table
+        - arping_host
+        - check_required_tools
+        - cpu_usage
+        - curl_request
+        - dig_query
+        - disk_usage
+        - health
+        - host_lookup
+        - httpie_request
+        - memory_usage
+        - mtr_monitor
+        - netcat_test
+        - netstat_connections
+        - nmap_scan
+        - nslookup_query
+        - ping_host
+        - port_scan
+        - process_list
+        - service_discovery
+        - service_enumeration
+        - ss_connections
+        - system_status
+        - telnet_connect
+        - traceroute_path
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the behavior? Include the exact tool call/parameters.
+      placeholder: |
+        1. Start the server with ...
+        2. Call the tool with parameters ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: |
+        Paste any relevant log output or error messages. It will be rendered as
+        code, so no backticks are needed.
+        **REDACT any API keys, tokens, or other secrets before pasting.**
+      render: shell
+    validations:
+      required: false

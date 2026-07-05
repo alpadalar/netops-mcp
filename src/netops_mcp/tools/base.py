@@ -159,45 +159,105 @@ class NetOpsTool:
         return self._format_response(error_response)
 
     def _validate_host(self, host: str) -> bool:
-        """Validate host parameter.
+        """Validate host FORMAT by delegating to the central validators (REF-02).
+
+        Keeps the historical ``-> bool`` contract: True for a well-formed
+        hostname or IP literal, False otherwise. This is format-only — SSRF
+        policy (loopback/link-local/metadata) is enforced separately by
+        ``_enforce_ssrf`` / ``_enforce_ssrf_url``.
 
         Args:
             host: Host to validate
 
         Returns:
-            True if host is valid
+            True if host is a valid hostname or IP literal
         """
-        if not host or not isinstance(host, str):
+        from ..validators.input_validator import (
+            ValidationError,
+            validate_hostname,
+            validate_ip_address,
+        )
+
+        try:
+            validate_hostname(host)
+            return True
+        except ValidationError:
+            pass
+        try:
+            validate_ip_address(host)
+            return True
+        except ValidationError:
             return False
-        
-        host = host.strip()
-        if len(host) == 0:
-            return False
-        
-        # Check for invalid patterns
-        if '..' in host or ' ' in host:
-            return False
-        
-        # Basic domain/IP validation
-        import re
-        # IP address pattern
-        ip_pattern = re.compile(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$')
-        # Domain pattern
-        domain_pattern = re.compile(r'^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$')
-        
-        return bool(ip_pattern.match(host) or domain_pattern.match(host))
 
     def _validate_port(self, port: Union[int, str]) -> bool:
-        """Validate port parameter.
+        """Validate a port by delegating to the central validator (REF-02).
 
         Args:
             port: Port to validate
 
         Returns:
-            True if port is valid
+            True if port is a valid 1-65535 integer (or int-parseable string)
         """
+        from ..validators.input_validator import ValidationError, validate_port
+
         try:
-            port_num = int(port)
-            return 1 <= port_num <= 65535
-        except (ValueError, TypeError):
+            return bool(validate_port(int(port)))
+        except (ValueError, TypeError, ValidationError):
             return False
+
+    def _enforce_ssrf(self, host: str, port: int = 0) -> list:
+        """SSRF-classify a NON-HTTP connection target (ping/traceroute/nmap/...).
+
+        Fail-OPEN on resolution failure (A3): a down or unresolvable host is a
+        legitimate diagnostic target, so a ``socket.gaierror`` yields ``[]`` and
+        the caller proceeds to report the natural failure. A resolved-but-blocked
+        category (loopback/link-local/metadata) raises ``ValidationError``, which
+        the tool's existing ``except Exception`` envelope converts to an error
+        response — no new plumbing required.
+
+        Args:
+            host: The connection target (name or IP literal)
+            port: Optional target port (used for resolution; 0 -> default 80)
+
+        Returns:
+            The resolved IP list (empty on unresolvable host)
+        """
+        import socket as _socket
+
+        from ..validators.input_validator import enforce_ssrf
+
+        try:
+            return enforce_ssrf(host, self._security, port or 80)
+        except _socket.gaierror:
+            return []
+
+    def _enforce_ssrf_url(self, url: str) -> list:
+        """SSRF-classify an HTTP URL target and return the pinned IP list.
+
+        Fail-CLOSED on resolution failure (A3): curl must never run unpinned, so
+        an unresolvable host raises ``ValidationError`` rather than proceeding.
+        The returned IPs are what HTTP tools pin curl to via ``--resolve``.
+
+        Args:
+            url: The request URL
+
+        Returns:
+            The resolved IP list for the URL host
+
+        Raises:
+            ValidationError: on a blocked category or an unresolvable host
+        """
+        import socket as _socket
+        from urllib.parse import urlsplit
+
+        from ..validators.input_validator import ValidationError, enforce_ssrf
+
+        parts = urlsplit(url)
+        host = parts.hostname
+        if not host:
+            raise ValidationError(f"URL has no host to resolve: {url}")
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        try:
+            return enforce_ssrf(host, self._security, port)
+        except _socket.gaierror as exc:
+            raise ValidationError(f"could not resolve {host}") from exc

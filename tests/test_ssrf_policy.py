@@ -15,23 +15,21 @@ directly via ``ipaddress``. DNS-rebind patches the ``_resolve`` seam directly.
 import ipaddress
 
 import pytest
-
 from netops_mcp.config.models import SecurityConfig
 from netops_mcp.validators import input_validator
 from netops_mcp.validators.input_validator import ValidationError, enforce_ssrf
 
-
 # Every entry collapses to loopback / link-local / cloud-metadata once resolved,
 # so all must be BLOCKED under the secure default policy.
 BLOCKED = [
-    "127.0.0.1",               # loopback literal
-    "2130706433",              # decimal encoding of 127.0.0.1
-    "0x7f000001",              # hex encoding of 127.0.0.1
-    "0177.0.0.1",             # octal first-octet encoding of 127.0.0.1
-    "::1",                     # IPv6 loopback
-    "169.254.169.254",         # link-local / cloud metadata endpoint
+    "127.0.0.1",  # loopback literal
+    "2130706433",  # decimal encoding of 127.0.0.1
+    "0x7f000001",  # hex encoding of 127.0.0.1
+    "0177.0.0.1",  # octal first-octet encoding of 127.0.0.1
+    "::1",  # IPv6 loopback
+    "169.254.169.254",  # link-local / cloud metadata endpoint
     "::ffff:169.254.169.254",  # IPv4-mapped link-local (must unwrap)
-    "::ffff:127.0.0.1",        # IPv4-mapped loopback (must unwrap)
+    "::ffff:127.0.0.1",  # IPv4-mapped loopback (must unwrap)
 ]
 
 # Private RFC1918 LAN and global targets are the legitimate diagnostic surface.

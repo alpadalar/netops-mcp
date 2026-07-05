@@ -59,7 +59,6 @@ jobs:
           type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
           type=semver,pattern={{major}}.{{minor}},value=${{ env.RELEASE_TAG }}
           type=semver,pattern={{major}},value=${{ env.RELEASE_TAG }}
-          type=ref,event=branch
     
     - name: Build and push Docker image
       uses: docker/build-push-action@v7

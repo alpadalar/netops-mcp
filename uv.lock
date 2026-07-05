@@ -933,12 +933,6 @@ wheels = [
 ]
 
 [[package]]
-name = "netifaces"
-version = "0.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a6/91/86a6eac449ddfae239e93ffc1918cf33fd9bab35c04d1e963b311e347a73/netifaces-0.11.0.tar.gz", hash = "sha256:043a79146eb2907edf439899f262b3dfe41717d34124298ed281139a8b93ca32", size = 30106, upload-time = "2021-05-31T08:33:02.506Z" }
-
-[[package]]
 name = "netops-mcp"
 version = "0.1.0"
 source = { editable = "." }
@@ -949,7 +943,6 @@ dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "mcp" },
-    { name = "netifaces" },
     { name = "psutil" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -993,7 +986,6 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.24.0,<1.0.0" },
     { name = "mcp", specifier = ">=1.12.4,<2.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0,<2.0.0" },
-    { name = "netifaces", specifier = ">=0.11.0,<1.0.0" },
     { name = "psutil", specifier = ">=5.9.0,<6.0.0" },
     { name = "pydantic", specifier = ">=2.0.0,<3.0.0" },
     { name = "pyjwt", marker = "extra == 'django'", specifier = ">=2.8.0" },

@@ -45,8 +45,23 @@ README_EXAMPLE_DIGEST='sha256:0f70dbbe4175927d0c7ff3bdc45622f13e6a5d306248731395
 
 section() { printf '\n=== %s ===\n' "$1"; }
 
-# Count matching lines robustly (wc always exits 0; empty input -> 0).
-count_matches() { grep -icE "$1" 2>/dev/null || true; }
+# Count matching lines, FAILING CLOSED (WR-03). grep exit codes: 0=match,
+# 1=no match, >=2=error (bad regex, read/encoding failure, ...). A security
+# hard gate must never report "clean" for a check it could not actually run, so
+# on a grep error we emit a non-numeric sentinel; the caller detects it and
+# aborts non-zero. (The old `|| true` forced exit 0 and turned every error into
+# a silent "0 matches".) NOTE: this runs inside command substitution, so a bare
+# `exit` here would only leave the subshell — the abort must happen in the
+# caller after it inspects this output.
+count_matches() {
+    local out rc
+    out=$(grep -icE "$1"); rc=$?
+    if [ "$rc" -ge 2 ]; then
+        printf 'GREP_ERROR'
+        return 2
+    fi
+    printf '%s' "${out:-0}"
+}
 
 # ---------------------------------------------------------------------------
 # 0. Header
@@ -87,7 +102,14 @@ DIFF_ALL="$(git log -p --all -- .)"
 check_pattern() {
     local label="$1" regex="$2" hits
     hits=$(printf '%s\n' "$DIFF_ALL" | count_matches "$regex")
-    hits=${hits:-0}
+    # Fail closed (WR-03): if the count is not a plain integer, the underlying
+    # grep errored (or returned the GREP_ERROR sentinel) — treat an un-runnable
+    # check as fatal rather than a silent pass. check_pattern runs in the main
+    # shell (not a subshell), so this exit terminates the whole gate.
+    if ! printf '%s' "$hits" | grep -qE '^[0-9]+$'; then
+        printf 'FATAL: secret pattern "%s" could not be evaluated (grep error) — failing closed\n' "$label" >&2
+        exit 2
+    fi
     if [ "$hits" -ne 0 ]; then
         printf 'FINDING: %-34s %s hit(s)\n' "$label" "$hits"
         FINDINGS=$((FINDINGS + 1))

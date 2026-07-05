@@ -30,6 +30,14 @@ class SecurityConfig(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     allow_privileged_commands: bool = False
+    # SSRF policy (SEC-03): resolve-then-classify defaults. Private/LAN is
+    # allowed (the core diagnostic use of this tool); loopback and link-local
+    # (including cloud metadata 169.254.169.254 / fd00:ec2::254) are blocked by
+    # default. Operators diagnosing localhost opt in via allow_loopback=true.
+    allow_loopback: bool = False
+    allow_link_local: bool = False
+    allow_private: bool = True
+    block_metadata: bool = True
     allowed_hosts: list[str] = Field(default_factory=list)
     rate_limit_requests: int = 100
     rate_limit_window: int = 60

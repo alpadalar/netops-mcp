@@ -53,14 +53,14 @@ class NetOpsMCPServer:
         # Test system requirements on startup
         self._test_system_requirements()
 
-        # Initialize tools
-        self.http_tools = HTTPTools()
-        self.connectivity_tools = ConnectivityTools()
-        self.dns_tools = DNSTools()
-        self.discovery_tools = DiscoveryTools()
-        self.network_tools = NetworkTools()
-        self.monitoring_tools = MonitoringTools()
-        self.scanning_tools = ScanningTools()
+        # Initialize tools (thread config so tools can read self._security)
+        self.http_tools = HTTPTools(self.config)
+        self.connectivity_tools = ConnectivityTools(self.config)
+        self.dns_tools = DNSTools(self.config)
+        self.discovery_tools = DiscoveryTools(self.config)
+        self.network_tools = NetworkTools(self.config)
+        self.monitoring_tools = MonitoringTools(self.config)
+        self.scanning_tools = ScanningTools(self.config)
 
         # Initialize MCP server
         self.mcp = FastMCP("NetOpsMCP")

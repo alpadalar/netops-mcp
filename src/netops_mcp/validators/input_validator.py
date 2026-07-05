@@ -10,13 +10,96 @@ Provides comprehensive input validation and sanitization to prevent:
 
 import re
 import ipaddress
-from typing import Optional
+import socket
+from typing import List, Optional, Union
 from urllib.parse import urlparse
+
+from ..config.models import SecurityConfig
 
 
 class ValidationError(Exception):
     """Exception raised for validation errors."""
     pass
+
+
+# Union of the two concrete ipaddress leaf types (mypy-friendly; avoids the
+# private ipaddress._BaseAddress).
+_IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+
+# Cloud instance-metadata endpoints (IPv4 link-local IMDS + the IPv6 variant).
+_METADATA = {
+    ipaddress.ip_address("169.254.169.254"),
+    ipaddress.ip_address("fd00:ec2::254"),
+}
+
+
+def _resolve(host: str, port: int) -> List[_IPAddress]:
+    """Resolve a host to concrete IP objects (resolve step of SSRF policy).
+
+    SEAM: tests patch this (or ``socket.getaddrinfo``) to inject rebind or
+    loopback answers. IP literals take a fast path; names AND alternate
+    encodings (decimal ``2130706433``, hex ``0x7f000001``, octal ``0177.0.0.1``)
+    go through ``getaddrinfo``, which normalizes all radixes to the real IP
+    offline (glibc ``inet_aton``) — so no custom radix parser is needed.
+    """
+    try:
+        return [ipaddress.ip_address(host)]  # fast path: real IP literal
+    except ValueError:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+        # info[4][0] is the sockaddr address string; str() narrows the
+        # getaddrinfo sockaddr union (str | int) for mypy and is a no-op at
+        # runtime. split("%") strips any IPv6 zone id.
+        return [ipaddress.ip_address(str(info[4][0]).split("%")[0]) for info in infos]
+
+
+def _category(ip: _IPAddress) -> str:
+    """Classify an IP into an SSRF-relevant category via a precedence ladder.
+
+    Precedence is load-bearing: ``is_private`` is True for loopback AND
+    link-local (they are subsets), so classifying by independent flags would let
+    ``allow_private=True`` wrongly permit loopback. IPv4-mapped IPv6
+    (``::ffff:127.0.0.1``) is unwrapped first so it classifies by its IPv4 body.
+    """
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+        eff: _IPAddress = ip.ipv4_mapped
+    else:
+        eff = ip
+    if eff.is_loopback:
+        return "loopback"
+    if eff.is_link_local:  # incl. 169.254.0.0/16 metadata range
+        return "link_local"
+    if ip in _METADATA or eff in _METADATA:
+        return "metadata"
+    if eff.is_private:  # RFC1918 remainder
+        return "private"
+    if eff.is_reserved or eff.is_multicast or eff.is_unspecified:
+        return "reserved"
+    return "global"
+
+
+def enforce_ssrf(host: str, policy: SecurityConfig, port: int = 80) -> List[_IPAddress]:
+    """Resolve-then-classify a connection target; raise on a blocked category.
+
+    Returns the resolved IPs (HTTP tools pin curl to these via ``--resolve`` to
+    defeat DNS-rebind). Raises ``ValidationError`` when any resolved IP falls in
+    a category disallowed by ``policy``. Every SSRF-bypass encoding collapses to
+    one real IP the moment it is resolved, so the whole bypass corpus is
+    defeated here rather than by an ever-growing string blocklist.
+    """
+    ips = _resolve(host, port)
+    for ip in ips:
+        category = _category(ip)
+        if category == "loopback" and not policy.allow_loopback:
+            raise ValidationError(f"{host} -> {ip} is loopback (blocked)")
+        if category == "link_local" and not policy.allow_link_local:
+            raise ValidationError(f"{host} -> {ip} is link-local (blocked)")
+        if category == "metadata" and policy.block_metadata:
+            raise ValidationError(f"{host} -> {ip} is cloud metadata (blocked)")
+        if category == "private" and not policy.allow_private:
+            raise ValidationError(f"{host} -> {ip} is private (blocked)")
+        if category == "reserved":
+            raise ValidationError(f"{host} -> {ip} is reserved (blocked)")
+    return ips
 
 
 def validate_hostname(hostname: str, allow_localhost: bool = True) -> str:

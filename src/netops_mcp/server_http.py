@@ -81,14 +81,14 @@ class NetOpsMCPHTTPServer:
         self.port = port if port is not None else self.config.server.port
         self.path = path if path is not None else self.config.server.path
         
-        # Initialize tools
-        self.http_tools = HTTPTools()
-        self.connectivity_tools = ConnectivityTools()
-        self.dns_tools = DNSTools()
-        self.discovery_tools = DiscoveryTools()
-        self.network_tools = NetworkTools()
-        self.monitoring_tools = MonitoringTools()
-        self.scanning_tools = ScanningTools()
+        # Initialize tools (thread config so tools can read self._security)
+        self.http_tools = HTTPTools(self.config)
+        self.connectivity_tools = ConnectivityTools(self.config)
+        self.dns_tools = DNSTools(self.config)
+        self.discovery_tools = DiscoveryTools(self.config)
+        self.network_tools = NetworkTools(self.config)
+        self.monitoring_tools = MonitoringTools(self.config)
+        self.scanning_tools = ScanningTools(self.config)
         
         # Initialize FastMCP
         self.mcp = FastMCP("NetOpsMCP-HTTP")

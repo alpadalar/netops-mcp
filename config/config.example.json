@@ -6,6 +6,10 @@
   },
   "security": {
     "allow_privileged_commands": false,
+    "allow_loopback": false,
+    "allow_link_local": false,
+    "allow_private": true,
+    "block_metadata": true,
     "allowed_hosts": [],
     "rate_limit_requests": 100,
     "rate_limit_window": 60,

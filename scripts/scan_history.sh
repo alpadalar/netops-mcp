@@ -75,14 +75,14 @@ done
 # ---------------------------------------------------------------------------
 # 2. Targeted secret patterns over the full-history diff (all refs)
 # ---------------------------------------------------------------------------
-# The scanner's OWN definition files (this script + .gitleaks.toml) contain the
-# secret-pattern literals it searches for. Once committed, an unfiltered
-# `git log -p --all` would match those literals and flag the scanner as a
-# "secret" (self-reference). Exclude the two definition files from the diff —
-# the standard "a scanner ignores its own signatures" practice. Everything else
-# (src, tests, docs, config, uv.lock, README) is still fully scanned.
-section "Targeted secret patterns (git log -p --all, excluding scanner defs)"
-DIFF_ALL="$(git log -p --all -- . ':!scripts/scan_history.sh' ':!.gitleaks.toml')"
+# The ENTIRE tracked tree is scanned — including this script and .gitleaks.toml.
+# A hard publication gate must not carry a blind spot: a real secret committed
+# into the scanner's own definition files would otherwise ship undetected. The
+# only pattern that used to self-match the scanner's source (the redundant PEM
+# filename check) has been removed (it was fully covered by the private-key
+# block pattern below), so no whole-file self-exclusion is needed.
+section "Targeted secret patterns (git log -p --all, full tree)"
+DIFF_ALL="$(git log -p --all -- .)"
 
 check_pattern() {
     local label="$1" regex="$2" hits
@@ -101,7 +101,12 @@ check_pattern "AWS access key id (AKIA)"     'AKIA[0-9A-Z]{16}'
 check_pattern "GitHub token (ghp/gho/ghs/ghu)" 'gh[posu]_[A-Za-z0-9]{36}'
 check_pattern "Slack token (xox...)"         'xox[baprs]-[0-9A-Za-z-]{10,}'
 check_pattern "Google API key (AIza...)"     'AIza[0-9A-Za-z_-]{35}'
-check_pattern "PEM private-key filename"     '\-----BEGIN.*PRIVATE KEY-----'
+# NOTE: a separate PEM private-key filename pattern was intentionally removed.
+# It was fully subsumed by the private-key-block check above (which already
+# matches real PEM header lines), and it was the sole pattern that self-matched
+# this script's own source — the reason the scanner-def files used to be
+# excluded from the diff wholesale. Do NOT re-add a literal PEM header string
+# here: it would self-match the private-key-block check and fail this gate.
 
 # Real bearer tokens on ADDED lines, excluding documented placeholders.
 section "Real bearer tokens (added lines, excluding placeholders)"

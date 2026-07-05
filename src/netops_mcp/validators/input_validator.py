@@ -10,6 +10,7 @@ Provides comprehensive input validation and sanitization to prevent:
 
 import re
 import ipaddress
+import itertools
 import socket
 from typing import List, Optional, Union
 from urllib.parse import urlparse
@@ -25,12 +26,50 @@ class ValidationError(Exception):
 # Union of the two concrete ipaddress leaf types (mypy-friendly; avoids the
 # private ipaddress._BaseAddress).
 _IPAddress = Union[ipaddress.IPv4Address, ipaddress.IPv6Address]
+# Union of the two concrete ipaddress network types (range/CIDR scan guard).
+_IPNetwork = Union[ipaddress.IPv4Network, ipaddress.IPv6Network]
 
 # Cloud instance-metadata endpoints (IPv4 link-local IMDS + the IPv6 variant).
 _METADATA = {
     ipaddress.ip_address("169.254.169.254"),
     ipaddress.ip_address("fd00:ec2::254"),
 }
+
+# Sensitive network blocks mirroring the per-address _category() ladder. Used
+# ONLY by the range/CIDR SCAN-target guard (enforce_ssrf_scan_target) to test a
+# whole nmap range for overlap when it is too large to enumerate address by
+# address. Kept beside _METADATA so the address- and network-level views of the
+# same sensitive space stay in sync (SEC-03 / CR-01).
+_LOOPBACK_NETS = (
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+)
+_LINK_LOCAL_NETS = (
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("fe80::/10"),
+)
+_METADATA_NETS = (
+    ipaddress.ip_network("169.254.169.254/32"),
+    ipaddress.ip_network("fd00:ec2::254/128"),
+)
+_PRIVATE_NETS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("fc00::/7"),
+)
+
+# Range/CIDR scan targets at or below this many addresses are classified
+# address-by-address (exact, reuses _category); larger ranges fall back to
+# network-overlap against _blocked_networks (safe; may slightly over-block a
+# huge non-contiguous range, which is acceptable for a scanner).
+_SCAN_ENUM_CAP = 4096
+
+# One nmap IPv4 octet spec: '*', a number, a hyphen range, or a comma list of
+# either (e.g. '1-10', '1,3,5', '10-20,30').
+_IPV4_OCTET_RE = re.compile(
+    r"^(?:\*|\d{1,3}(?:-\d{1,3})?(?:,\d{1,3}(?:-\d{1,3})?)*)$"
+)
 
 
 def _resolve(host: str, port: int) -> List[_IPAddress]:
@@ -124,6 +163,133 @@ def enforce_ssrf(host: str, policy: SecurityConfig, port: int = 80) -> List[_IPA
     for ip in ips:
         _apply_policy(host, ip, policy)
     return ips
+
+
+def _blocked_networks(policy: SecurityConfig) -> List[_IPNetwork]:
+    """Networks disallowed under ``policy`` (loopback / link-local / metadata,
+    plus RFC1918 private when ``allow_private`` is False). Used by the
+    range-overlap fallback for scan ranges too large to enumerate."""
+    blocked: List[_IPNetwork] = []
+    if not policy.allow_loopback:
+        blocked.extend(_LOOPBACK_NETS)
+    if not policy.allow_link_local:
+        blocked.extend(_LINK_LOCAL_NETS)
+    if policy.block_metadata:
+        blocked.extend(_METADATA_NETS)
+    if not policy.allow_private:
+        blocked.extend(_PRIVATE_NETS)
+    return blocked
+
+
+def _octet_values(spec: str) -> List[int]:
+    """Expand one nmap IPv4 octet spec ('5', '1-10', '1,3,5', '*') to its ints."""
+    if spec == "*":
+        return list(range(256))
+    values: List[int] = []
+    for part in spec.split(","):
+        if "-" in part:
+            lo_s, hi_s = part.split("-", 1)
+            lo, hi = int(lo_s), int(hi_s)
+            if lo > hi:
+                raise ValidationError(f"Invalid octet range '{part}' (start > end)")
+            values.extend(range(lo, hi + 1))
+        else:
+            values.append(int(part))
+    for value in values:
+        if not 0 <= value <= 255:
+            raise ValidationError(f"Octet value out of range (0-255): {value}")
+    return values
+
+
+def _looks_like_ipv4_range(target: str) -> bool:
+    """True if ``target`` is dotted-quad nmap IPv4 syntax (single literal, or a
+    per-octet range / wildcard / comma list) — i.e. all-numeric, never a DNS
+    hostname that must go through the resolver."""
+    parts = target.split(".")
+    return len(parts) == 4 and all(_IPV4_OCTET_RE.match(part) for part in parts)
+
+
+def _enforce_scan_network(host: str, net: _IPNetwork, policy: SecurityConfig) -> None:
+    """Enforce policy across every address of a network. Small networks are
+    classified address-by-address (exact, reuses ``_apply_policy``); large ones
+    fall back to overlap against ``_blocked_networks``."""
+    if net.num_addresses <= _SCAN_ENUM_CAP:
+        for ip in net:
+            _apply_policy(host, ip, policy)
+        return
+    for blocked in _blocked_networks(policy):
+        if net.version == blocked.version and net.overlaps(blocked):
+            raise ValidationError(f"{host} covers blocked network {blocked}")
+
+
+def enforce_ssrf_scan_target(target: str, policy: SecurityConfig) -> None:
+    """Validate + SSRF-enforce an nmap-family SCAN target (SEC-03 / CR-01).
+
+    Scan targets differ from single connection targets (``enforce_ssrf``) in two
+    security-relevant ways, both closed here:
+
+      1. They may use nmap range / CIDR / wildcard syntax (``127.0.0.1-10``,
+         ``169.254.0.0/16``, ``192.168.1.*``). Such a target is EXPANDED and
+         EVERY covered address is classified; the scan is blocked if ANY covered
+         address is loopback / link-local / cloud-metadata / (when configured)
+         private / reserved. Plain ``validate_hostname`` accepts ``127.0.0.1-10``
+         as a legal hostname and ``enforce_ssrf`` then fails OPEN when the range
+         does not resolve — the exact bypass this closes.
+      2. A plain hostname that does not resolve fails CLOSED (raises), unlike the
+         diagnostic ping-family fail-OPEN posture: a scan target that will not
+         resolve must not silently proceed to the nmap subprocess.
+
+    Raises ``ValidationError`` on a malformed target, a blocked category, or an
+    unresolvable plain hostname. Returns None when the target is safe to scan.
+    """
+    if not target or not isinstance(target, str):
+        raise ValidationError("Scan target must be a non-empty string")
+    target = target.strip()
+
+    # CIDR (127.0.0.0/8, 192.168.1.0/24, ...): classify the whole network.
+    if "/" in target:
+        try:
+            net = ipaddress.ip_network(target, strict=False)
+        except ValueError as exc:
+            raise ValidationError(f"Invalid CIDR scan target: {target}") from exc
+        _enforce_scan_network(target, net, policy)
+        return
+
+    # Dotted-quad numeric syntax (single literal, per-octet range / wildcard /
+    # comma list): expand and classify offline, no DNS.
+    if _looks_like_ipv4_range(target):
+        octet_sets = [_octet_values(part) for part in target.split(".")]
+        total = 1
+        for values in octet_sets:
+            total *= len(values)
+        if total <= _SCAN_ENUM_CAP:
+            for combo in itertools.product(*octet_sets):
+                addr = ".".join(str(part) for part in combo)
+                _apply_policy(target, ipaddress.IPv4Address(addr), policy)
+            return
+        first = ipaddress.IPv4Address(
+            ".".join(str(min(values)) for values in octet_sets)
+        )
+        last = ipaddress.IPv4Address(
+            ".".join(str(max(values)) for values in octet_sets)
+        )
+        for net in ipaddress.summarize_address_range(first, last):
+            _enforce_scan_network(target, net, policy)
+        return
+
+    # Plain hostname or IPv6 literal: format-check, then resolve-and-classify.
+    # SCAN tools fail CLOSED on an unresolvable name (distinct from the
+    # ping-family fail-OPEN A3 decision preserved for connectivity tools).
+    try:
+        validate_hostname(target)
+    except ValidationError:
+        validate_ip_address(target)
+    try:
+        enforce_ssrf(target, policy)
+    except socket.gaierror as exc:
+        raise ValidationError(
+            f"scan target '{target}' does not resolve; scan tools fail closed"
+        ) from exc
 
 
 def validate_hostname(hostname: str, allow_localhost: bool = True) -> str:

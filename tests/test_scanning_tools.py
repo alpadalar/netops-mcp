@@ -216,3 +216,53 @@ class TestScanningTools:
             assert "disabled by config" not in r1[0].text.lower()
             assert "disabled by config" not in r2[0].text.lower()
             assert mock_execute.call_count == 2
+
+    # ------------------------------------------------------------------
+    # CR-01: nmap range/CIDR targets must not bypass the SSRF block via the
+    # resolver fail-open path. Every covered address is classified before any
+    # scan runs; loopback/link-local/metadata ranges are blocked, legitimate
+    # private ranges are still allowed (no over-block).
+    # ------------------------------------------------------------------
+    @pytest.mark.parametrize("target,ports", [
+        ("127.0.0.1-10", "1-100"),      # octet range over loopback
+        ("127.0.0.0/8", "80"),          # CIDR loopback
+        ("169.254.0.0/16", "80"),       # CIDR link-local (incl. IMDS)
+        ("169.254.169.250-254", "80"),  # octet range over metadata
+    ])
+    def test_port_scan_range_cidr_blocked_when_sensitive(self, target, ports):
+        """Loopback / link-local / metadata range & CIDR scan targets are blocked
+        before _execute_command (the octet-range fail-open bypass is closed)."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            result = self.scanning_tools.port_scan(target, ports)
+
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    @pytest.mark.parametrize("target,ports", [
+        ("192.168.1.0/24", "80"),   # private CIDR
+        ("10.0.0.1-50", "80"),      # private octet range
+        ("192.168.1.*", "80"),      # private wildcard octet
+    ])
+    def test_port_scan_private_range_allowed(self, target, ports):
+        """Legitimate private range/CIDR scan targets are NOT over-blocked and
+        reach the scan subprocess."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Port scan results",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = self.scanning_tools.port_scan(target, ports)
+
+            assert "Port scan" in result[0].text
+            mock_execute.assert_called_once()
+
+    def test_service_enumeration_metadata_octet_range_blocked(self):
+        """service_enumeration blocks an octet range that covers the IMDS."""
+        with patch.object(self.scanning_tools, '_execute_command') as mock_execute:
+            result = self.scanning_tools.service_enumeration("169.254.169.250-254")
+
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()

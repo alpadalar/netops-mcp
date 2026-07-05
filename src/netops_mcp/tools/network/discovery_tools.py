@@ -39,13 +39,13 @@ class DiscoveryTools(NetOpsTool):
             List of Content objects with nmap results
         """
         try:
-            if not self._validate_host(target):
-                raise ValueError("Invalid target provided")
-
-            # SEC-03: SSRF-classify the scan target (loopback/link-local blocked
-            # by default; private/global allowed). NON-HTTP fail-OPEN: an
-            # unresolvable host proceeds to report the natural nmap failure.
-            self._enforce_ssrf(target)
+            # SEC-03 / CR-01: range-aware validate + SSRF-classify the scan
+            # target. nmap range/CIDR/wildcard syntax (e.g. 169.254.169.250-254,
+            # 127.0.0.0/8) is expanded and every covered address classified; an
+            # unresolvable host fails CLOSED, so octet-range targets can no longer
+            # slip past the loopback/link-local/metadata block via resolver
+            # fail-open.
+            self._enforce_ssrf_scan_target(target)
 
             if not self._validate_scan_type(scan_type):
                 raise ValueError("Invalid scan type provided")
@@ -107,12 +107,11 @@ class DiscoveryTools(NetOpsTool):
             List of Content objects with service discovery results
         """
         try:
-            if not self._validate_host(target):
-                raise ValueError("Invalid target provided")
-
-            # SEC-03: SSRF-classify the target. service_discovery uses -sV -sC
-            # (connect scan) so it is NOT privileged-gated per the two-layer ruling.
-            self._enforce_ssrf(target)
+            # SEC-03 / CR-01: range-aware validate + SSRF-classify the scan
+            # target (fails CLOSED on unresolvable; expands nmap range/CIDR
+            # syntax and classifies every covered address). service_discovery
+            # uses -sV -sC (connect scan) so it is NOT privileged-gated.
+            self._enforce_ssrf_scan_target(target)
 
             # Use nmap for service discovery
             command = ['nmap', '-sV', '-sC', '--version-intensity', '5']

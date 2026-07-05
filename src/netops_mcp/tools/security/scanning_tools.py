@@ -48,13 +48,13 @@ class ScanningTools(NetOpsTool):
             List of Content objects with port scan results
         """
         try:
-            if not self._validate_host(target):
-                raise ValueError("Invalid target provided")
-
-            # SEC-03: SSRF-classify the scan target (loopback/link-local blocked
-            # by default; private/global allowed). port_scan uses -sT (connect
-            # scan) so it is NOT privileged-gated per the two-layer ruling.
-            self._enforce_ssrf(target)
+            # SEC-03 / CR-01: range-aware validate + SSRF-classify the scan
+            # target. nmap CIDR/octet-range/wildcard syntax is expanded and every
+            # covered address classified (loopback/link-local/metadata blocked by
+            # default), and an unresolvable host fails CLOSED — so octet-range
+            # targets can no longer slip past via resolver fail-open. port_scan
+            # uses -sT (connect scan) so it is NOT privileged-gated.
+            self._enforce_ssrf_scan_target(target)
 
             if not self._validate_ports(ports):
                 raise ValueError("Invalid ports specification provided")
@@ -88,12 +88,11 @@ class ScanningTools(NetOpsTool):
             List of Content objects with service enumeration results
         """
         try:
-            if not self._validate_host(target):
-                raise ValueError("Invalid target provided")
-
-            # SEC-03: SSRF-classify the target. service_enumeration uses -sV -sC
-            # (connect scan) so it is NOT privileged-gated per the two-layer ruling.
-            self._enforce_ssrf(target)
+            # SEC-03 / CR-01: range-aware validate + SSRF-classify the scan
+            # target (fails CLOSED on unresolvable; expands nmap range/CIDR
+            # syntax and classifies every covered address). service_enumeration
+            # uses -sV -sC (connect scan) so it is NOT privileged-gated.
+            self._enforce_ssrf_scan_target(target)
 
             if ports and not self._validate_ports(ports):
                 raise ValueError("Invalid ports specification provided")

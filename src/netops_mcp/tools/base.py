@@ -231,6 +231,30 @@ class NetOpsTool:
         except _socket.gaierror:
             return []
 
+    def _enforce_ssrf_scan_target(self, target: str) -> None:
+        """Validate + SSRF-classify an nmap-family SCAN target (SEC-03 / CR-01).
+
+        Unlike ``_enforce_ssrf`` (single connection target, fail-OPEN on an
+        unresolvable diagnostic host), this is RANGE-AWARE: nmap
+        CIDR/octet-range/wildcard syntax (``127.0.0.1-10``, ``169.254.0.0/16``,
+        ``192.168.1.*``) is expanded and EVERY covered address is classified, and
+        it fails CLOSED on an unresolvable plain hostname. A target that resolves
+        to — or covers — loopback/link-local/cloud-metadata is blocked before the
+        nmap subprocess runs, closing the octet-range fail-open bypass.
+        ``ValidationError`` propagates to the tool's existing ``except Exception``
+        envelope, which converts it to a structured error response.
+
+        Args:
+            target: The scan target (host, IP literal, or nmap range/CIDR)
+
+        Raises:
+            ValidationError: on a malformed target, a blocked category, or an
+                unresolvable plain hostname
+        """
+        from ..validators.input_validator import enforce_ssrf_scan_target
+
+        enforce_ssrf_scan_target(target, self._security)
+
     def _enforce_ssrf_url(self, url: str) -> list:
         """SSRF-classify an HTTP URL target and return the pinned IP list.
 

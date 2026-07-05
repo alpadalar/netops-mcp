@@ -13,11 +13,16 @@ directly via ``ipaddress``. DNS-rebind patches the ``_resolve`` seam directly.
 """
 
 import ipaddress
+import socket
 
 import pytest
 from netops_mcp.config.models import SecurityConfig
 from netops_mcp.validators import input_validator
-from netops_mcp.validators.input_validator import ValidationError, enforce_ssrf
+from netops_mcp.validators.input_validator import (
+    ValidationError,
+    enforce_ssrf,
+    enforce_ssrf_scan_target,
+)
 
 # Every entry collapses to loopback / link-local / cloud-metadata once resolved,
 # so all must be BLOCKED under the secure default policy.
@@ -102,3 +107,69 @@ def test_metadata_allowed_when_link_local_allowed_and_not_blocked():
     policy = SecurityConfig(allow_link_local=True, block_metadata=False)
     ips = enforce_ssrf("169.254.169.254", policy)
     assert ips, "IMDS must be allowed when link-local is allowed and metadata not blocked"
+
+
+# ---------------------------------------------------------------------------
+# CR-01: range-aware SCAN-target enforcement (enforce_ssrf_scan_target).
+# nmap octet-range / CIDR / wildcard syntax is expanded and every covered
+# address classified, closing the resolver fail-open bypass. Scan tools also
+# fail CLOSED on an unresolvable plain hostname.
+# ---------------------------------------------------------------------------
+SCAN_ALLOWED = [
+    "192.168.1.0/24",  # private CIDR
+    "10.0.0.1-50",     # private octet range
+    "192.168.1.*",     # private wildcard octet
+    "8.8.8.8",         # single global literal
+    "8.8.8.0/24",      # global CIDR
+]
+
+
+@pytest.mark.parametrize("target", [
+    "127.0.0.1-10",
+    "169.254.169.250-254",
+    "127.0.0.0/8",
+    "169.254.0.0/16",
+    "169.0.0.0/8",
+    "127.0.0.1",
+])
+def test_scan_target_blocks_sensitive_ranges(target):
+    """Every covered address of a loopback/link-local/metadata range is
+    classified; the whole target is blocked under the default policy."""
+    with pytest.raises(ValidationError):
+        enforce_ssrf_scan_target(target, SecurityConfig())
+
+
+@pytest.mark.parametrize("target", SCAN_ALLOWED)
+def test_scan_target_allows_private_and_global_ranges(target):
+    """Legitimate private/global range & CIDR targets are NOT over-blocked."""
+    enforce_ssrf_scan_target(target, SecurityConfig())  # must not raise
+
+
+def test_scan_target_fails_closed_on_unresolvable_hostname(monkeypatch):
+    """A plain scan hostname that does not resolve fails CLOSED (raises),
+    unlike the ping-family fail-OPEN posture."""
+    def boom(host, port):
+        raise socket.gaierror("Name or service not known")
+
+    monkeypatch.setattr(input_validator, "_resolve", boom)
+    with pytest.raises(ValidationError):
+        enforce_ssrf_scan_target("scanme.example", SecurityConfig())
+
+
+def test_scan_target_dns_rebind_blocked(monkeypatch):
+    """A benign scan name whose resolver returns a disallowed IP is blocked —
+    classification happens on the resolved IP, not the name."""
+    monkeypatch.setattr(
+        input_validator,
+        "_resolve",
+        lambda host, port: [ipaddress.ip_address("169.254.169.254")],
+    )
+    with pytest.raises(ValidationError):
+        enforce_ssrf_scan_target("benign-name.example", SecurityConfig())
+
+
+@pytest.mark.parametrize("target", ["", None, "invalid..host", "256.1.1.1"])
+def test_scan_target_rejects_malformed(target):
+    """Empty / malformed / out-of-range scan targets raise ValidationError."""
+    with pytest.raises(ValidationError):
+        enforce_ssrf_scan_target(target, SecurityConfig())

@@ -148,6 +148,52 @@ class TestDiscoveryTools:
             assert "Nmap scan report" in result[0].text
             mock_execute.assert_called_once()
 
+    # ------------------------------------------------------------------
+    # CR-01: nmap range/CIDR scan targets must not bypass the SSRF block via the
+    # resolver fail-open path.
+    # ------------------------------------------------------------------
+    @pytest.mark.parametrize("target", [
+        "169.254.169.250-254",  # octet range over cloud metadata (IMDS)
+        "127.0.0.1-10",         # octet range over loopback
+        "127.0.0.0/8",          # CIDR loopback
+        "169.254.0.0/16",       # CIDR link-local
+    ])
+    def test_nmap_scan_range_cidr_blocked_when_sensitive(self, target):
+        """nmap_scan blocks loopback/link-local/metadata range & CIDR targets
+        before _execute_command (octet-range fail-open bypass closed)."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.nmap_scan(target, scan_type="basic")
+
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
+    @pytest.mark.parametrize("target", [
+        "192.168.1.0/24",  # private CIDR
+        "10.0.0.1-50",     # private octet range
+    ])
+    def test_nmap_scan_private_range_allowed(self, target):
+        """Legitimate private range/CIDR targets are NOT over-blocked."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            mock_execute.return_value = {
+                "success": True,
+                "stdout": "Nmap scan report for test-host",
+                "stderr": "",
+                "return_code": 0
+            }
+
+            result = self.discovery_tools.nmap_scan(target, scan_type="basic")
+
+            assert "Nmap scan report" in result[0].text
+            mock_execute.assert_called_once()
+
+    def test_service_discovery_loopback_octet_range_blocked(self):
+        """service_discovery blocks an octet range that covers loopback."""
+        with patch.object(self.discovery_tools, '_execute_command') as mock_execute:
+            result = self.discovery_tools.service_discovery("127.0.0.1-10")
+
+            assert "error" in result[0].text.lower()
+            mock_execute.assert_not_called()
+
     @pytest.mark.parametrize("host,scan_type", [
         ("google.com", "invalid_scan_type"),
         ("google.com", ""),

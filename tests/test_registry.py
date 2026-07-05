@@ -12,8 +12,6 @@ disappears on an SDK bump, so REF-05 never silently reports a zero tool count.
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from netops_mcp.tools.registry import _registered_tool_count, register_tools
 
 

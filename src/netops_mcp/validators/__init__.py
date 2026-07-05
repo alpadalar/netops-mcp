@@ -8,13 +8,13 @@ This package contains validators for:
 """
 
 from .input_validator import (
+    ValidationError,
+    sanitize_command_arg,
+    validate_domain,
     validate_hostname,
     validate_ip_address,
     validate_port,
     validate_url,
-    validate_domain,
-    sanitize_command_arg,
-    ValidationError
 )
 
 __all__ = [
@@ -24,7 +24,5 @@ __all__ = [
     "validate_url",
     "validate_domain",
     "sanitize_command_arg",
-    "ValidationError"
+    "ValidationError",
 ]
-
-

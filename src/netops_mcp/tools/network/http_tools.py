@@ -5,9 +5,11 @@ HTTP/API testing tools for NetOps MCP.
 import json
 import os
 import tempfile
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlsplit
+
 from mcp.types import TextContent as Content
+
 from ..base import NetOpsTool
 
 
@@ -47,12 +49,11 @@ class HTTPTools(NetOpsTool):
         """
         if not method or not isinstance(method, str):
             return False
-        
-        valid_methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']
+
+        valid_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
         return method.upper() in valid_methods
 
-    def _curl_resolve_args(self, url: str,
-                           resolved_ips: Optional[List[str]]) -> List[str]:
+    def _curl_resolve_args(self, url: str, resolved_ips: Optional[List[str]]) -> List[str]:
         """Build the curl ``--resolve`` pin args for the classified IP(s) (SEC-03).
 
         Pins curl to the already-classified IP so it cannot re-resolve the host
@@ -77,11 +78,16 @@ class HTTPTools(NetOpsTool):
         addrs = ",".join(str(ip) for ip in resolved_ips)
         return ["--resolve", f"{host}:{port}:{addrs}"]
 
-    def _format_curl_command(self, url: str, method: str = "GET",
-                           headers: Optional[Dict[str, str]] = None,
-                           data: Optional[str] = None, timeout: int = 30,
-                           out_path: Optional[str] = None,
-                           resolved_ips: Optional[List[str]] = None) -> List[str]:
+    def _format_curl_command(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[str] = None,
+        timeout: int = 30,
+        out_path: Optional[str] = None,
+        resolved_ips: Optional[List[str]] = None,
+    ) -> List[str]:
         """Format curl command with parameters.
 
         Args:
@@ -98,16 +104,16 @@ class HTTPTools(NetOpsTool):
         Returns:
             List of command arguments
         """
-        command = ['curl', '-s', '-w', '@-']
+        command = ["curl", "-s", "-w", "@-"]
 
         # Route the response body to a per-request private file (SEC-02).
         if out_path:
-            command.extend(['-o', out_path])
+            command.extend(["-o", out_path])
 
         # Never follow redirects — closes redirect-to-metadata (SEC-03, T-4-04).
-        command.extend(['--max-redirs', '0'])
+        command.extend(["--max-redirs", "0"])
 
-        command.extend(['-X', method])
+        command.extend(["-X", method])
 
         # Pin curl to the classified IP so it cannot re-resolve (SEC-03, T-4-03).
         command.extend(self._curl_resolve_args(url, resolved_ips))
@@ -117,21 +123,25 @@ class HTTPTools(NetOpsTool):
         # Add headers
         if headers:
             for key, value in headers.items():
-                command.extend(['-H', f'{key}: {value}'])
+                command.extend(["-H", f"{key}: {value}"])
 
         # Add data
         if data:
-            command.extend(['-d', data])
+            command.extend(["-d", data])
 
         # Add timeout
-        command.extend(['--max-time', str(timeout)])
+        command.extend(["--max-time", str(timeout)])
 
         return command
 
-    def _format_httpie_command(self, url: str, method: str = "GET",
-                              headers: Optional[Dict[str, str]] = None,
-                              data: Optional[Dict[str, Any]] = None, 
-                              timeout: int = 30) -> List[str]:
+    def _format_httpie_command(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        timeout: int = 30,
+    ) -> List[str]:
         """Format httpie command with parameters.
 
         Args:
@@ -144,18 +154,18 @@ class HTTPTools(NetOpsTool):
         Returns:
             List of command arguments
         """
-        command = ['http', method, url, '--timeout', str(timeout)]
-        
+        command = ["http", method, url, "--timeout", str(timeout)]
+
         # Add headers
         if headers:
             for key, value in headers.items():
-                command.extend([f'{key}:{value}'])
-        
+                command.extend([f"{key}:{value}"])
+
         # Add data
         if data:
             for key, value in data.items():
-                command.extend([f'{key}={value}'])
-        
+                command.extend([f"{key}={value}"])
+
         return command
 
     def _parse_curl_output(self, output: str) -> Dict[str, Any]:
@@ -172,8 +182,14 @@ class HTTPTools(NetOpsTool):
         except json.JSONDecodeError:
             return {"error": "Could not parse curl output"}
 
-    def curl_request(self, url: str, method: str = "GET", headers: Optional[Dict[str, str]] = None, 
-                    data: Optional[str] = None, timeout: int = 30) -> List[Content]:
+    def curl_request(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[str] = None,
+        timeout: int = 30,
+    ) -> List[Content]:
         """Execute HTTP request using curl.
 
         Args:
@@ -213,7 +229,7 @@ class HTTPTools(NetOpsTool):
                 if result["success"]:
                     # Read this request's private output file
                     try:
-                        with open(out_path, 'r') as f:
+                        with open(out_path, "r") as f:
                             response_body = f.read()
                     except FileNotFoundError:
                         response_body = ""
@@ -227,7 +243,7 @@ class HTTPTools(NetOpsTool):
                         "success": True,
                         "stats": stats,
                         "response_body": response_body,
-                        "stderr": result["stderr"]
+                        "stderr": result["stderr"],
                     }
                 else:
                     response_data = {
@@ -235,7 +251,7 @@ class HTTPTools(NetOpsTool):
                         "method": method,
                         "success": False,
                         "error": result["stderr"],
-                        "return_code": result["return_code"]
+                        "return_code": result["return_code"],
                     }
 
                 return self._format_response(response_data, "curl_request")
@@ -248,8 +264,14 @@ class HTTPTools(NetOpsTool):
         except Exception as e:
             return self._handle_error("curl request", e)
 
-    def httpie_request(self, url: str, method: str = "GET", headers: Optional[Dict[str, str]] = None,
-                      data: Optional[Dict[str, Any]] = None, timeout: int = 30) -> List[Content]:
+    def httpie_request(
+        self,
+        url: str,
+        method: str = "GET",
+        headers: Optional[Dict[str, str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        timeout: int = 30,
+    ) -> List[Content]:
         """Execute HTTP request using httpie.
 
         Args:
@@ -279,23 +301,29 @@ class HTTPTools(NetOpsTool):
             command = self._format_httpie_command(url, method, headers, data, timeout)
 
             result = self._execute_command(command, timeout + 5)
-            
+
             response_data = {
                 "url": url,
                 "method": method,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "httpie_request")
-            
+
         except Exception as e:
             return self._handle_error("httpie request", e)
 
-    def api_test(self, url: str, method: str = "GET", expected_status: int = 200,
-                headers: Optional[Dict[str, str]] = None, timeout: int = 30) -> List[Content]:
+    def api_test(
+        self,
+        url: str,
+        method: str = "GET",
+        expected_status: int = 200,
+        headers: Optional[Dict[str, str]] = None,
+        timeout: int = 30,
+    ) -> List[Content]:
         """Test API endpoint with validation.
 
         Args:
@@ -327,25 +355,35 @@ class HTTPTools(NetOpsTool):
                 # Use curl for API testing with proper output handling.
                 # --max-redirs 0 (no -L) closes redirect-to-metadata;
                 # --resolve pins the classified IP against DNS-rebind (SEC-03).
-                command = ['curl', '-s', '-w', '%{http_code}', '-o', out_path,
-                           '--max-redirs', '0', '-X', method]
+                command = [
+                    "curl",
+                    "-s",
+                    "-w",
+                    "%{http_code}",
+                    "-o",
+                    out_path,
+                    "--max-redirs",
+                    "0",
+                    "-X",
+                    method,
+                ]
                 command.extend(self._curl_resolve_args(url, resolved_ips))
                 command.append(url)
 
                 # Add headers
                 if headers:
                     for key, value in headers.items():
-                        command.extend(['-H', f'{key}: {value}'])
+                        command.extend(["-H", f"{key}: {value}"])
 
                 # Add timeout
-                command.extend(['--max-time', str(timeout)])
+                command.extend(["--max-time", str(timeout)])
 
                 result = self._execute_command(command, timeout + 5)
 
                 if result["success"]:
                     # Read this request's private output file
                     try:
-                        with open(out_path, 'r') as f:
+                        with open(out_path, "r") as f:
                             response_body = f.read()
                     except FileNotFoundError:
                         response_body = ""
@@ -363,7 +401,7 @@ class HTTPTools(NetOpsTool):
                         "actual_status": status_code,
                         "success": status_code == expected_status,
                         "response_body": response_body,
-                        "test_passed": status_code == expected_status
+                        "test_passed": status_code == expected_status,
                     }
                 else:
                     test_result = {
@@ -372,7 +410,7 @@ class HTTPTools(NetOpsTool):
                         "expected_status": expected_status,
                         "success": False,
                         "error": result["stderr"],
-                        "test_passed": False
+                        "test_passed": False,
                     }
 
                 return self._format_response(test_result, "api_test")

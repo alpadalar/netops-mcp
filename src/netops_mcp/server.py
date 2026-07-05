@@ -14,25 +14,25 @@ The server exposes a comprehensive set of tools for network operations including
 - Monitoring tools (system status, resource usage)
 """
 
-import logging
 import os
-import sys
 import signal
-from typing import Optional, List
+import sys
+from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from .config.loader import load_config
 from .core.logging import setup_logging
-from .tools.network.http_tools import HTTPTools
 from .tools.network.connectivity_tools import ConnectivityTools
-from .tools.network.dns_tools import DNSTools
 from .tools.network.discovery_tools import DiscoveryTools
-from .tools.system.network_tools import NetworkTools
-from .tools.system.monitoring_tools import MonitoringTools
-from .tools.security.scanning_tools import ScanningTools
+from .tools.network.dns_tools import DNSTools
+from .tools.network.http_tools import HTTPTools
 from .tools.registry import register_tools
-from .utils.system_check import check_required_tools as check_tools_status, get_system_info
+from .tools.security.scanning_tools import ScanningTools
+from .tools.system.monitoring_tools import MonitoringTools
+from .tools.system.network_tools import NetworkTools
+from .utils.system_check import check_required_tools as check_tools_status
+from .utils.system_check import get_system_info
 
 
 class NetOpsMCPServer:
@@ -76,7 +76,7 @@ class NetOpsMCPServer:
 
             # Check required tools
             tool_status = check_tools_status()
-            missing_tools = tool_status['missing_tools']
+            missing_tools = tool_status["missing_tools"]
 
             if missing_tools:
                 self.logger.warning(f"Missing tools: {', '.join(missing_tools)}")
@@ -110,9 +110,12 @@ class NetOpsMCPServer:
             run_tests = os.getenv("RUN_TESTS_ON_START", "0").lower() in ("1", "true", "yes", "on")
             if run_tests:
                 import subprocess
+
                 self.logger.info("Running startup tests (pytest)...")
                 env = os.environ.copy()
-                env["PYTHONPATH"] = f"{os.getcwd()}/src" + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+                env["PYTHONPATH"] = f"{os.getcwd()}/src" + (
+                    ":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else ""
+                )
                 # WR-01: stdin=DEVNULL — without it the pytest child (and the
                 # entire test process tree it spawns) inherits fd 0, which at
                 # this point is already the client's MCP JSON-RPC pipe.
@@ -123,9 +126,12 @@ class NetOpsMCPServer:
                     stdin=subprocess.DEVNULL,
                     env=env,
                 )
-                self._tests_passed = (result.returncode == 0)
+                self._tests_passed = result.returncode == 0
                 if not self._tests_passed:
-                    self.logger.error("Startup tests failed. Health will be 'degraded'. Output:\n" + result.stdout.decode())
+                    self.logger.error(
+                        "Startup tests failed. Health will be 'degraded'. Output:\n"
+                        + result.stdout.decode()
+                    )
                 else:
                     self.logger.info("Startup tests passed.")
 
@@ -140,9 +146,9 @@ def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='NetOps MCP Server')
-    parser.add_argument('--config', help='Configuration file path')
-    parser.add_argument('--test', action='store_true', help='Run system tests and exit')
+    parser = argparse.ArgumentParser(description="NetOps MCP Server")
+    parser.add_argument("--config", help="Configuration file path")
+    parser.add_argument("--test", action="store_true", help="Run system tests and exit")
 
     args = parser.parse_args()
 
@@ -157,12 +163,12 @@ def main():
         print(f"Memory: {system_info['memory_total']}")
 
         print("\nRequired tools:")
-        for tool in tools['available_tools']:
+        for tool in tools["available_tools"]:
             print(f"  ✅ {tool}")
-        for tool in tools['missing_tools']:
+        for tool in tools["missing_tools"]:
             print(f"  ❌ {tool}")
 
-        missing = tools['missing_tools']
+        missing = tools["missing_tools"]
         if missing:
             print(f"\nMissing tools: {', '.join(missing)}")
             sys.exit(1)

@@ -117,21 +117,24 @@ def test_metadata_allowed_when_link_local_allowed_and_not_blocked():
 # ---------------------------------------------------------------------------
 SCAN_ALLOWED = [
     "192.168.1.0/24",  # private CIDR
-    "10.0.0.1-50",     # private octet range
-    "192.168.1.*",     # private wildcard octet
-    "8.8.8.8",         # single global literal
-    "8.8.8.0/24",      # global CIDR
+    "10.0.0.1-50",  # private octet range
+    "192.168.1.*",  # private wildcard octet
+    "8.8.8.8",  # single global literal
+    "8.8.8.0/24",  # global CIDR
 ]
 
 
-@pytest.mark.parametrize("target", [
-    "127.0.0.1-10",
-    "169.254.169.250-254",
-    "127.0.0.0/8",
-    "169.254.0.0/16",
-    "169.0.0.0/8",
-    "127.0.0.1",
-])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "127.0.0.1-10",
+        "169.254.169.250-254",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "169.0.0.0/8",
+        "127.0.0.1",
+    ],
+)
 def test_scan_target_blocks_sensitive_ranges(target):
     """Every covered address of a loopback/link-local/metadata range is
     classified; the whole target is blocked under the default policy."""
@@ -148,6 +151,7 @@ def test_scan_target_allows_private_and_global_ranges(target):
 def test_scan_target_fails_closed_on_unresolvable_hostname(monkeypatch):
     """A plain scan hostname that does not resolve fails CLOSED (raises),
     unlike the ping-family fail-OPEN posture."""
+
     def boom(host, port):
         raise socket.gaierror("Name or service not known")
 
@@ -185,10 +189,13 @@ def test_scan_target_rejects_malformed(target):
 # refactor that inverts the overlap sense or mis-computes min/max octets fails
 # loudly instead of silently re-opening the bypass.
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("target", [
-    "1-255.1-255.0.1",        # 65025 addrs; bounding box straddles 127.0.0.0/8
-    "120,200.0-255.0-255.1",  # 131072 addrs; non-contiguous comma straddles loopback
-])
+@pytest.mark.parametrize(
+    "target",
+    [
+        "1-255.1-255.0.1",  # 65025 addrs; bounding box straddles 127.0.0.0/8
+        "120,200.0-255.0-255.1",  # 131072 addrs; non-contiguous comma straddles loopback
+    ],
+)
 def test_scan_target_large_octet_range_fallback_blocks(target):
     """A >4096-address octet range whose bounding box overlaps a blocked
     network (loopback/link-local/metadata) is blocked via the summarize-range

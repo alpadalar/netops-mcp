@@ -2,76 +2,67 @@
 Pytest configuration and fixtures for NetOps MCP tests.
 """
 
-import pytest
-import sys
 import os
-import tempfile
 import shutil
-from unittest.mock import patch, MagicMock
-from typing import Dict, Any
+import sys
+import tempfile
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from netops_mcp.tools.base import NetOpsTool
-from netops_mcp.tools.network.http_tools import HTTPTools
-from netops_mcp.tools.network.connectivity_tools import ConnectivityTools
-from netops_mcp.tools.network.dns_tools import DNSTools
-from netops_mcp.tools.network.discovery_tools import DiscoveryTools
-from netops_mcp.tools.system.network_tools import NetworkTools
-from netops_mcp.tools.system.monitoring_tools import MonitoringTools
-from netops_mcp.tools.security.scanning_tools import ScanningTools
 
 
 @pytest.fixture
 def mock_execute_command():
     """Mock _execute_command method for testing."""
-    with patch.object(NetOpsTool, '_execute_command') as mock:
+    with patch.object(NetOpsTool, "_execute_command") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_subprocess_run():
     """Mock subprocess.run for testing."""
-    with patch('subprocess.run') as mock:
+    with patch("subprocess.run") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_shutil_which():
     """Mock shutil.which for testing."""
-    with patch('shutil.which') as mock:
+    with patch("shutil.which") as mock:
         yield mock
 
 
 @pytest.fixture
 def mock_psutil():
     """Mock psutil for testing."""
-    with patch('psutil.cpu_percent') as mock_cpu, \
-         patch('psutil.virtual_memory') as mock_memory, \
-         patch('psutil.disk_usage') as mock_disk, \
-         patch('psutil.process_iter') as mock_processes:
-        
+    with patch("psutil.cpu_percent") as mock_cpu, patch(
+        "psutil.virtual_memory"
+    ) as mock_memory, patch("psutil.disk_usage") as mock_disk, patch(
+        "psutil.process_iter"
+    ) as mock_processes:
         # Setup default mock returns
         mock_cpu.return_value = 25.5
         mock_memory.return_value = MagicMock(
             total=8589934592,  # 8GB
             available=4294967296,  # 4GB
             used=4294967296,  # 4GB
-            percent=50.0
+            percent=50.0,
         )
         mock_disk.return_value = MagicMock(
-            total=107374182400,  # 100GB
-            used=53687091200,  # 50GB
-            free=53687091200  # 50GB
+            total=107374182400, used=53687091200, free=53687091200  # 100GB  # 50GB  # 50GB
         )
         mock_processes.return_value = []
-        
+
         yield {
-            'cpu': mock_cpu,
-            'memory': mock_memory,
-            'disk': mock_disk,
-            'processes': mock_processes
+            "cpu": mock_cpu,
+            "memory": mock_memory,
+            "disk": mock_disk,
+            "processes": mock_processes,
         }
 
 
@@ -90,7 +81,7 @@ def sample_curl_output():
 }""",
         "stderr": "",
         "return_code": 0,
-        "command": "curl -s -w @- -o /tmp/curl_output -X GET https://example.com"
+        "command": "curl -s -w @- -o /tmp/curl_output -X GET https://example.com",
     }
 
 
@@ -110,7 +101,7 @@ def sample_ping_output():
 rtt min/avg/max/mdev = 1.230/1.395/1.560/0.134 ms""",
         "stderr": "",
         "return_code": 0,
-        "command": "ping -c 4 -W 10 google.com"
+        "command": "ping -c 4 -W 10 google.com",
     }
 
 
@@ -126,7 +117,7 @@ def sample_ping_unreachable_output():
 """,
         "stderr": "",
         "return_code": 1,
-        "command": "ping -c 4 -W 10 192.0.2.1"
+        "command": "ping -c 4 -W 10 192.0.2.1",
     }
 
 
@@ -144,7 +135,7 @@ def sample_ping_partial_loss_output():
 rtt min/avg/max/mdev = 1.230/1.340/1.450/0.110 ms""",
         "stderr": "",
         "return_code": 0,
-        "command": "ping -c 4 -W 10 google.com"
+        "command": "ping -c 4 -W 10 google.com",
     }
 
 
@@ -157,7 +148,7 @@ def sample_ping_zero_tx_output():
 0 packets transmitted, 0 received, time 0ms""",
         "stderr": "",
         "return_code": 1,
-        "command": "ping -c 4 -W 10 8.8.8.8"
+        "command": "ping -c 4 -W 10 8.8.8.8",
     }
 
 
@@ -169,7 +160,7 @@ def sample_ping_dns_failure_output():
         "stdout": "",
         "stderr": "ping: nonexistent-host.invalid: Name or service not known",
         "return_code": 2,
-        "command": "ping -c 4 -W 10 nonexistent-host.invalid"
+        "command": "ping -c 4 -W 10 nonexistent-host.invalid",
     }
 
 
@@ -186,7 +177,7 @@ def sample_traceroute_output():
  5  google.com (142.250.185.78)  15.678 ms  15.432 ms  15.567 ms""",
         "stderr": "",
         "return_code": 0,
-        "command": "traceroute google.com"
+        "command": "traceroute google.com",
     }
 
 
@@ -203,7 +194,7 @@ HOST: test-host                Loss%   Snt   Last   Avg  Best  Wrst StDev
   4.|-- google.com              0.0%     3   15.3  15.4  15.1  15.7   0.3""",
         "stderr": "",
         "return_code": 0,
-        "command": "mtr -c 3 --report google.com"
+        "command": "mtr -c 3 --report google.com",
     }
 
 
@@ -222,7 +213,7 @@ Name:   google.com
 Address: 2607:f8b0:4004:c0c::65""",
         "stderr": "",
         "return_code": 0,
-        "command": "nslookup -type=A google.com"
+        "command": "nslookup -type=A google.com",
     }
 
 
@@ -248,7 +239,7 @@ google.com.             300     IN      A       142.250.185.78
 ;; MSG SIZE  rcvd: 55""",
         "stderr": "",
         "return_code": 0,
-        "command": "dig google.com A"
+        "command": "dig google.com A",
     }
 
 
@@ -270,7 +261,7 @@ PORT      STATE SERVICE
 Nmap done: 1 IP address (1 host up) scanned in 2.34 seconds""",
         "stderr": "",
         "return_code": 0,
-        "command": "nmap -sS -p 1-1000 scanme.nmap.org"
+        "command": "nmap -sS -p 1-1000 scanme.nmap.org",
     }
 
 
@@ -286,7 +277,7 @@ LISTEN     0      128     *:443                 *:*
 ESTAB      0      0       192.168.1.100:12345    8.8.8.8:53""",
         "stderr": "",
         "return_code": 0,
-        "command": "ss -tuln"
+        "command": "ss -tuln",
     }
 
 
@@ -302,7 +293,7 @@ tcp        0      0 0.0.0.0:80              0.0.0.0:*               LISTEN
 tcp        0      0 0.0.0.0:443             0.0.0.0:*               LISTEN""",
         "stderr": "",
         "return_code": 0,
-        "command": "netstat -tuln"
+        "command": "netstat -tuln",
     }
 
 
@@ -316,7 +307,7 @@ def sample_arp_output():
 192.168.1.100            ether   aa:bb:cc:dd:ee:ff     C                     eth0""",
         "stderr": "",
         "return_code": 0,
-        "command": "arp -a"
+        "command": "arp -a",
     }
 
 
@@ -332,15 +323,7 @@ def temp_dir():
 @pytest.fixture
 def valid_hosts():
     """List of valid hostnames/IPs for testing."""
-    return [
-        "google.com",
-        "192.168.1.1",
-        "10.0.0.1",
-        "localhost",
-        "127.0.0.1",
-        "::1",
-        "example.com"
-    ]
+    return ["google.com", "192.168.1.1", "10.0.0.1", "localhost", "127.0.0.1", "::1", "example.com"]
 
 
 @pytest.fixture
@@ -353,7 +336,7 @@ def invalid_hosts():
         "256.256.256.256",
         "192.168.1.256",
         "host with spaces",
-        "host@invalid"
+        "host@invalid",
     ]
 
 
@@ -377,7 +360,7 @@ def test_urls():
         "https://httpbin.org/post",
         "https://httpbin.org/status/200",
         "https://httpbin.org/status/404",
-        "https://httpbin.org/delay/1"
+        "https://httpbin.org/delay/1",
     ]
 
 
@@ -414,13 +397,15 @@ def stub_ssrf_resolver():
 
     def fake_getaddrinfo(host, port, *args, **kwargs):
         if host in _SSRF_TEST_DOMAINS:
-            return [(
-                _socket_mod.AF_INET,
-                _socket_mod.SOCK_STREAM,
-                _socket_mod.IPPROTO_TCP,
-                "",
-                (_SSRF_STUB_GLOBAL_IP, port or 0),
-            )]
+            return [
+                (
+                    _socket_mod.AF_INET,
+                    _socket_mod.SOCK_STREAM,
+                    _socket_mod.IPPROTO_TCP,
+                    "",
+                    (_SSRF_STUB_GLOBAL_IP, port or 0),
+                )
+            ]
         return _REAL_GETADDRINFO(host, port, *args, **kwargs)
 
     with patch("socket.getaddrinfo", side_effect=fake_getaddrinfo):

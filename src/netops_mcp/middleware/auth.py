@@ -25,20 +25,20 @@ logger = logging.getLogger("netops-mcp.auth")
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     """
     Middleware for API key authentication.
-    
+
     Supports:
     - Bearer token in Authorization header
     - API-Key in custom header
     - Exempt paths (health checks, etc.)
     - Multiple API keys
     """
-    
+
     def __init__(
         self,
         app: ASGIApp,
         api_keys: List[str],
         require_auth: bool = True,
-        exempt_paths: Optional[Set[str]] = None
+        exempt_paths: Optional[Set[str]] = None,
     ):
         """
         Initialize authentication middleware.
@@ -60,21 +60,21 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         logger.info(f"Authentication middleware initialized with {len(api_keys)} keys")
         logger.info(f"Exempt paths: {self.exempt_paths}")
         logger.info(f"Authentication required: {require_auth}")
-    
+
     @staticmethod
     def _hash_key(key: str) -> str:
         """Hash an API key using SHA-256."""
         return hashlib.sha256(key.encode()).hexdigest()
-    
+
     def _extract_api_key(self, request: Request) -> Optional[str]:
         """
         Extract API key from request headers.
-        
+
         Supports:
         - Authorization: Bearer <token>
         - X-API-Key: <token>
         - API-Key: <token>
-        
+
         Returns:
             API key if found, None otherwise
         """
@@ -82,19 +82,19 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             return auth_header[7:]  # Remove "Bearer " prefix
-        
+
         # Try X-API-Key header
         api_key = request.headers.get("X-API-Key")
         if api_key:
             return api_key
-        
+
         # Try API-Key header (alternative)
         api_key = request.headers.get("API-Key")
         if api_key:
             return api_key
-        
+
         return None
-    
+
     def _validate_digest(self, digest: str) -> bool:
         """
         Compare a sha256 hex digest against stored digests in constant time.
@@ -122,17 +122,17 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             True if valid, False otherwise
         """
         return self._validate_digest(self._hash_key(api_key))
-    
+
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         """
         Process the request and validate authentication.
-        
+
         Args:
             request: The incoming request
             call_next: The next middleware/handler
-            
+
         Returns:
             Response from next handler or authentication error
         """
@@ -141,15 +141,15 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         if path in self.exempt_paths:
             logger.debug(f"Path {path} is exempt from authentication")
             return await call_next(request)
-        
+
         # If authentication is not required, allow all requests
         if not self.require_auth:
             logger.debug("Authentication not required, allowing request")
             return await call_next(request)
-        
+
         # Extract API key from request
         api_key = self._extract_api_key(request)
-        
+
         if not api_key:
             # WR-05: record the failed attempt so auth_attempts_total /
             # auth_failures_total reflect real traffic instead of a hard zero.
@@ -159,11 +159,9 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 status_code=401,
                 content={
                     "error": "Authentication required",
-                    "message": "Please provide an API key using Authorization header (Bearer token) or X-API-Key header"
+                    "message": "Please provide an API key using Authorization header (Bearer token) or X-API-Key header",
                 },
-                headers={
-                    "WWW-Authenticate": 'Bearer realm="NetOpsMCP"'
-                }
+                headers={"WWW-Authenticate": 'Bearer realm="NetOpsMCP"'},
             )
 
         # Validate API key (digest computed once, reused for logging state)
@@ -176,8 +174,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 content={
                     "error": "Invalid API key",
-                    "message": "The provided API key is not valid"
-                }
+                    "message": "The provided API key is not valid",
+                },
             )
 
         # API key is valid, proceed with request
@@ -196,10 +194,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 def generate_api_key(length: int = 32) -> str:
     """
     Generate a secure random API key.
-    
+
     Args:
         length: Length of the API key (default: 32)
-        
+
     Returns:
         Secure random API key
     """
@@ -209,13 +207,11 @@ def generate_api_key(length: int = 32) -> str:
 def hash_api_key(api_key: str) -> str:
     """
     Hash an API key for secure storage.
-    
+
     Args:
         api_key: The API key to hash
-        
+
     Returns:
         SHA-256 hash of the API key
     """
     return hashlib.sha256(api_key.encode()).hexdigest()
-
-

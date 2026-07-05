@@ -27,11 +27,14 @@ class TestParsePingOutput:
         assert stats["max_rtt"] == 1.56
         assert stats["mdev_rtt"] == 0.134
 
-    @pytest.mark.parametrize("stats_line,expected_loss", [
-        ("4 packets transmitted, 4 received, 0% packet loss, time 3003ms", 0.0),
-        ("4 packets transmitted, 2 received, 50% packet loss, time 3005ms", 50.0),
-        ("4 packets transmitted, 3 received, 25% packet loss, time 3004ms", 25.0),
-    ])
+    @pytest.mark.parametrize(
+        "stats_line,expected_loss",
+        [
+            ("4 packets transmitted, 4 received, 0% packet loss, time 3003ms", 0.0),
+            ("4 packets transmitted, 2 received, 50% packet loss, time 3005ms", 50.0),
+            ("4 packets transmitted, 3 received, 25% packet loss, time 3004ms", 25.0),
+        ],
+    )
     def test_parse_ping_output_loss_percent(self, stats_line, expected_loss):
         """Loss percent is computed as float 100 - received/transmitted*100."""
         stats = OutputParser.parse_ping_output(stats_line)

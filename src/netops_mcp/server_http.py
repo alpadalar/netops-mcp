@@ -14,10 +14,12 @@ from typing import Optional
 
 try:
     from fastmcp import FastMCP
+
     FASTMCP_AVAILABLE = True
 except ImportError:
     try:
         from mcp.server.fastmcp import FastMCP
+
         FASTMCP_AVAILABLE = True
     except ImportError:
         FASTMCP_AVAILABLE = False
@@ -46,19 +48,21 @@ from .utils.system_check import check_required_tools as check_tools_status
 class NetOpsMCPHTTPServer:
     """
     HTTP-based MCP server for network operations tools.
-    
+
     This server supports:
     - Streamable HTTP transport
     - Comprehensive network operations toolset
     - Real-time network diagnostics
     - System monitoring capabilities
     """
-    
-    def __init__(self,
-                 config_path: Optional[str] = None,
-                 host: Optional[str] = None,
-                 port: Optional[int] = None,
-                 path: Optional[str] = None):
+
+    def __init__(
+        self,
+        config_path: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        path: Optional[str] = None,
+    ):
         """
         Initialize the HTTP MCP server.
 
@@ -80,7 +84,7 @@ class NetOpsMCPHTTPServer:
         self.host = host if host is not None else self.config.server.host
         self.port = port if port is not None else self.config.server.port
         self.path = path if path is not None else self.config.server.path
-        
+
         # Initialize tools (thread config so tools can read self._security)
         self.http_tools = HTTPTools(self.config)
         self.connectivity_tools = ConnectivityTools(self.config)
@@ -89,7 +93,7 @@ class NetOpsMCPHTTPServer:
         self.network_tools = NetworkTools(self.config)
         self.monitoring_tools = MonitoringTools(self.config)
         self.scanning_tools = ScanningTools(self.config)
-        
+
         # Initialize FastMCP
         self.mcp = FastMCP("NetOpsMCP-HTTP")
 
@@ -133,14 +137,16 @@ class NetOpsMCPHTTPServer:
             cache = self._tool_status_cache
             available = len(cache["available_tools"])
             total = available + len(cache["missing_tools"])
-            return JSONResponse({
-                "status": "healthy",
-                "server": "NetOpsMCP-HTTP",
-                "mcp_tools": self.tool_count,
-                "system_tools_available": available,
-                "system_tools_total": total,
-                "authentication": self.config.security.require_auth,
-            })
+            return JSONResponse(
+                {
+                    "status": "healthy",
+                    "server": "NetOpsMCP-HTTP",
+                    "mcp_tools": self.tool_count,
+                    "system_tools_available": available,
+                    "system_tools_total": total,
+                    "authentication": self.config.security.require_auth,
+                }
+            )
 
         @self.mcp.custom_route("/metrics", methods=["GET"])
         async def metrics(request):
@@ -262,8 +268,8 @@ class NetOpsMCPHTTPServer:
                 "HTTP mode requires an API key (require_auth is enabled by default).\n"
                 f"  1. Example key (generated now, save it): {example}\n"
                 f"  2. Add its hash to config security.api_keys: "
-                f"\"sha256:{hashlib.sha256(example.encode()).hexdigest()}\"\n"
-                "  3. Or explicitly opt out: \"require_auth\": false  (NOT recommended)\n"
+                f'"sha256:{hashlib.sha256(example.encode()).hexdigest()}"\n'
+                '  3. Or explicitly opt out: "require_auth": false  (NOT recommended)\n'
             )
 
         def signal_handler(signum, frame):
@@ -275,7 +281,9 @@ class NetOpsMCPHTTPServer:
         signal.signal(signal.SIGTERM, signal_handler)
 
         try:
-            self.logger.info(f"Starting NetOpsMCP HTTP server on {self.host}:{self.port}{self.path}")
+            self.logger.info(
+                f"Starting NetOpsMCP HTTP server on {self.host}:{self.port}{self.path}"
+            )
 
             # REF-07: build the ONE served app (middleware + /health + /metrics
             # baked in) and drive uvicorn on it directly. Driving uvicorn here
@@ -304,15 +312,17 @@ def main() -> None:
     """Main entry point for standalone execution."""
     import argparse
 
-    parser = argparse.ArgumentParser(description='NetOpsMCP HTTP Server')
-    parser.add_argument('--host', default=None,
-                        help='Server host (default: config server.host or 0.0.0.0)')
-    parser.add_argument('--port', type=int, default=None,
-                        help='Server port (default: config server.port or 8815)')
-    parser.add_argument('--path', default=None,
-                        help='HTTP path (default: config server.path or /netops-mcp)')
-    parser.add_argument('--config',
-                        help='Configuration file path (default: $NETOPS_MCP_CONFIG)')
+    parser = argparse.ArgumentParser(description="NetOpsMCP HTTP Server")
+    parser.add_argument(
+        "--host", default=None, help="Server host (default: config server.host or 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=None, help="Server port (default: config server.port or 8815)"
+    )
+    parser.add_argument(
+        "--path", default=None, help="HTTP path (default: config server.path or /netops-mcp)"
+    )
+    parser.add_argument("--config", help="Configuration file path (default: $NETOPS_MCP_CONFIG)")
 
     args = parser.parse_args()
 
@@ -322,10 +332,7 @@ def main() -> None:
 
     try:
         server = NetOpsMCPHTTPServer(
-            config_path=config_path,
-            host=args.host,
-            port=args.port,
-            path=args.path
+            config_path=config_path, host=args.host, port=args.port, path=args.path
         )
 
         server.run()

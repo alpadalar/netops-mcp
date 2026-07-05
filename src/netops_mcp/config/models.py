@@ -12,13 +12,15 @@ time instead of being silently dropped.
 """
 
 import re
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class LoggingConfig(BaseModel):
     """Model for logging configuration."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
 
     level: str = "INFO"
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -27,7 +29,8 @@ class LoggingConfig(BaseModel):
 
 class SecurityConfig(BaseModel):
     """Model for security configuration."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
 
     allow_privileged_commands: bool = False
     # SSRF policy (SEC-03): resolve-then-classify defaults. Private/LAN is
@@ -55,12 +58,12 @@ class SecurityConfig(BaseModel):
             if not re.fullmatch(r"sha256:[0-9a-f]{64}", k):
                 raise ValueError(
                     "api_keys entries must be 'sha256:<64-hex>' digests. Hash your key: "
-                    "python -c \"import hashlib;"
+                    'python -c "import hashlib;'
                     "print('sha256:'+hashlib.sha256(b'YOUR-KEY').hexdigest())\""
                 )
         return v
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def _no_wildcard_with_credentials(self) -> "SecurityConfig":
         """Reject wildcard CORS origins combined with credentials.
 
@@ -78,7 +81,8 @@ class SecurityConfig(BaseModel):
 
 class NetworkConfig(BaseModel):
     """Model for network diagnostic tools configuration."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
 
     default_timeout: int = 30
     max_retries: int = 3
@@ -105,8 +109,7 @@ class NetworkConfig(BaseModel):
             raise ValueError("allowed_ports must be a non-empty port range string")
         if not re.fullmatch(r"[0-9,\-]+", spec):
             raise ValueError(
-                "allowed_ports may contain only digits, commas, and hyphens "
-                '(e.g. "1-1024,8080")'
+                "allowed_ports may contain only digits, commas, and hyphens " '(e.g. "1-1024,8080")'
             )
         for part in spec.split(","):
             part = part.strip()
@@ -130,7 +133,8 @@ class NetworkConfig(BaseModel):
 
 class ServerConfig(BaseModel):
     """Model for HTTP server configuration (host/port/path defaults)."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
 
     host: str = "0.0.0.0"
     port: int = 8815
@@ -139,7 +143,8 @@ class ServerConfig(BaseModel):
 
 class Config(BaseModel):
     """Root configuration model."""
-    model_config = ConfigDict(extra='forbid')
+
+    model_config = ConfigDict(extra="forbid")
 
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)

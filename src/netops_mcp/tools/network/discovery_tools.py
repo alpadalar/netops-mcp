@@ -2,9 +2,10 @@
 Network discovery tools for NetOps MCP.
 """
 
-import re
-from typing import Dict, List, Optional
+from typing import List, Optional
+
 from mcp.types import TextContent as Content
+
 from ..base import NetOpsTool
 
 
@@ -23,7 +24,7 @@ class DiscoveryTools(NetOpsTool):
         if not scan_type or not isinstance(scan_type, str):
             return False
 
-        valid_scan_types = ['basic', 'quick', 'full']
+        valid_scan_types = ["basic", "quick", "full"]
         return scan_type.lower() in valid_scan_types
 
     def _validate_ports(self, ports: str) -> bool:
@@ -53,7 +54,9 @@ class DiscoveryTools(NetOpsTool):
         except ValidationError:
             return False
 
-    def nmap_scan(self, target: str, ports: Optional[str] = None, scan_type: str = "basic", timeout: int = 300) -> List[Content]:
+    def nmap_scan(
+        self, target: str, ports: Optional[str] = None, scan_type: str = "basic", timeout: int = 300
+    ) -> List[Content]:
         """Scan network using nmap.
 
         Args:
@@ -98,17 +101,17 @@ class DiscoveryTools(NetOpsTool):
 
             # Build nmap command based on scan type
             if scan_type == "basic":
-                command = ['nmap', '-sT', '-T4']
+                command = ["nmap", "-sT", "-T4"]
             elif scan_type == "quick":
-                command = ['nmap', '-sS', '-T4', '--top-ports', '100']
+                command = ["nmap", "-sS", "-T4", "--top-ports", "100"]
             elif scan_type == "full":
-                command = ['nmap', '-sS', '-sV', '-O', '-T4']
+                command = ["nmap", "-sS", "-sV", "-O", "-T4"]
             else:
-                command = ['nmap', '-sT', '-T4']
-            
+                command = ["nmap", "-sT", "-T4"]
+
             # Add port specification
             if ports:
-                command.extend(['-p', ports])
+                command.extend(["-p", ports])
 
             # Add target: hand nmap the pinned resolved IP(s) for a plain
             # hostname (WR-02, defeats nmap's independent re-resolution /
@@ -120,7 +123,7 @@ class DiscoveryTools(NetOpsTool):
                 command.append(target)
 
             result = self._execute_command(command, timeout)
-            
+
             response_data = {
                 "target": target,
                 "ports": ports,
@@ -128,11 +131,11 @@ class DiscoveryTools(NetOpsTool):
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "nmap_scan")
-            
+
         except Exception as e:
             return self._handle_error("nmap scan", e)
 
@@ -160,10 +163,10 @@ class DiscoveryTools(NetOpsTool):
                 raise ValueError("Invalid ports specification provided")
 
             # Use nmap for service discovery
-            command = ['nmap', '-sV', '-sC', '--version-intensity', '5']
+            command = ["nmap", "-sV", "-sC", "--version-intensity", "5"]
 
             if ports:
-                command.extend(['-p', ports])
+                command.extend(["-p", ports])
 
             # Add target: pinned resolved IP(s) for a plain hostname (WR-02),
             # else the original literal/range/CIDR target passed through.
@@ -173,17 +176,17 @@ class DiscoveryTools(NetOpsTool):
                 command.append(target)
 
             result = self._execute_command(command, 180)
-            
+
             response_data = {
                 "target": target,
                 "ports": ports,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "service_discovery")
-            
+
         except Exception as e:
             return self._handle_error("service discovery", e)

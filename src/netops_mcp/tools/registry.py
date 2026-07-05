@@ -83,7 +83,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         method: Annotated[str, Field(description="HTTP method", default="GET")] = "GET",
         headers: Annotated[Optional[dict], Field(description="HTTP headers")] = None,
         data: Annotated[Optional[str], Field(description="Request body")] = None,
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
     ):
         return tools.http_tools.curl_request(url, method, headers, data, timeout)
 
@@ -93,7 +93,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         method: Annotated[str, Field(description="HTTP method", default="GET")] = "GET",
         headers: Annotated[Optional[dict], Field(description="HTTP headers")] = None,
         data: Annotated[Optional[dict], Field(description="Request data")] = None,
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
     ):
         return tools.http_tools.httpie_request(url, method, headers, data, timeout)
 
@@ -101,9 +101,11 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def api_test(
         url: Annotated[str, Field(description="API endpoint URL")],
         method: Annotated[str, Field(description="HTTP method", default="GET")] = "GET",
-        expected_status: Annotated[int, Field(description="Expected HTTP status", default=200)] = 200,
+        expected_status: Annotated[
+            int, Field(description="Expected HTTP status", default=200)
+        ] = 200,
         headers: Annotated[Optional[dict], Field(description="HTTP headers")] = None,
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
     ):
         return tools.http_tools.api_test(url, method, expected_status, headers, timeout)
 
@@ -112,7 +114,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def ping_host(
         host: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of ping packets", default=4)] = 4,
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
     ):
         return tools.connectivity_tools.ping_host(host, count, timeout)
 
@@ -120,7 +122,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def traceroute_path(
         target: Annotated[str, Field(description="Target host")],
         max_hops: Annotated[int, Field(description="Maximum number of hops", default=30)] = 30,
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
     ):
         return tools.connectivity_tools.traceroute_path(target, max_hops, timeout)
 
@@ -128,7 +130,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def mtr_monitor(
         target: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of probes", default=10)] = 10,
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
     ):
         return tools.connectivity_tools.mtr_monitor(target, count, timeout)
 
@@ -136,7 +138,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def telnet_connect(
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="Target port")],
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
     ):
         return tools.connectivity_tools.telnet_connect(host, port, timeout)
 
@@ -144,7 +146,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def netcat_test(
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="Target port")],
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
     ):
         return tools.connectivity_tools.netcat_test(host, port, timeout)
 
@@ -153,7 +155,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def nslookup_query(
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
-        server: Annotated[Optional[str], Field(description="DNS server")] = None
+        server: Annotated[Optional[str], Field(description="DNS server")] = None,
     ):
         return tools.dns_tools.nslookup_query(domain, record_type, server)
 
@@ -161,14 +163,14 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def dig_query(
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
-        server: Annotated[Optional[str], Field(description="DNS server")] = None
+        server: Annotated[Optional[str], Field(description="DNS server")] = None,
     ):
         return tools.dns_tools.dig_query(domain, record_type, server)
 
     @mcp.tool(description="Perform DNS lookup using host")
     def host_lookup(
         domain: Annotated[str, Field(description="Domain to lookup")],
-        record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A"
+        record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
     ):
         return tools.dns_tools.host_lookup(domain, record_type)
 
@@ -178,14 +180,14 @@ def register_tools(mcp: Any, tools: Any) -> int:
         target: Annotated[str, Field(description="Target host or network")],
         ports: Annotated[Optional[str], Field(description="Port range (e.g., '22,80,443')")] = None,
         scan_type: Annotated[str, Field(description="Scan type", default="basic")] = "basic",
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=300)] = 300
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=300)] = 300,
     ):
         return tools.discovery_tools.nmap_scan(target, ports, scan_type, timeout)
 
     @mcp.tool(description="Discover network services")
     def service_discovery(
         target: Annotated[str, Field(description="Target host")],
-        ports: Annotated[Optional[str], Field(description="Port range")] = None
+        ports: Annotated[Optional[str], Field(description="Port range")] = None,
     ):
         return tools.discovery_tools.service_discovery(target, ports)
 
@@ -193,14 +195,14 @@ def register_tools(mcp: Any, tools: Any) -> int:
     @mcp.tool(description="Show network connections using ss")
     def ss_connections(
         state: Annotated[Optional[str], Field(description="Connection state")] = None,
-        protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None
+        protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None,
     ):
         return tools.network_tools.ss_connections(state, protocol)
 
     @mcp.tool(description="Show network connections using netstat")
     def netstat_connections(
         state: Annotated[Optional[str], Field(description="Connection state")] = None,
-        protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None
+        protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None,
     ):
         return tools.network_tools.netstat_connections(state, protocol)
 
@@ -211,7 +213,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     @mcp.tool(description="ARP ping a host")
     def arping_host(
         host: Annotated[str, Field(description="Target host")],
-        count: Annotated[int, Field(description="Number of packets", default=4)] = 4
+        count: Annotated[int, Field(description="Number of packets", default=4)] = 4,
     ):
         return tools.network_tools.arping_host(host, count)
 
@@ -243,14 +245,14 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def port_scan(
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[str, Field(description="Port range (e.g., '1-1000')")],
-        timeout: Annotated[int, Field(description="Timeout in seconds", default=60)] = 60
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=60)] = 60,
     ):
         return tools.scanning_tools.port_scan(target, ports, timeout)
 
     @mcp.tool(description="Enumerate services on a target")
     def service_enumeration(
         target: Annotated[str, Field(description="Target host")],
-        ports: Annotated[Optional[str], Field(description="Port range")] = None
+        ports: Annotated[Optional[str], Field(description="Port range")] = None,
     ):
         return tools.scanning_tools.service_enumeration(target, ports)
 
@@ -281,19 +283,29 @@ def register_tools(mcp: Any, tools: Any) -> int:
         # server, which never runs startup tests) — acceptable per plan.
         tests_passed = getattr(tools, "_tests_passed", None)
         status = (
-            "ok" if tests_passed is True
-            else ("degraded" if tests_passed is False else "unknown")
+            "ok" if tests_passed is True else ("degraded" if tests_passed is False else "unknown")
         )
-        return [Content(type="text", text=json.dumps({
-            "status": status,
-            "tests_passed": tests_passed,
-            "mcp_tools": _registered_tool_count(mcp),
-            "details": (
-                "Startup tests passed" if tests_passed is True
-                else ("Startup tests failed" if tests_passed is False
-                      else "No tests executed")
+        return [
+            Content(
+                type="text",
+                text=json.dumps(
+                    {
+                        "status": status,
+                        "tests_passed": tests_passed,
+                        "mcp_tools": _registered_tool_count(mcp),
+                        "details": (
+                            "Startup tests passed"
+                            if tests_passed is True
+                            else (
+                                "Startup tests failed"
+                                if tests_passed is False
+                                else "No tests executed"
+                            )
+                        ),
+                    }
+                ),
             )
-        }))]
+        ]
 
     # REF-05: derive the count dynamically from the FastMCP instance rather
     # than the old hardcoded literal 26. WR-03: access is wrapped defensively

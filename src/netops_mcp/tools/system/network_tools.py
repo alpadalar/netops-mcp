@@ -2,15 +2,19 @@
 System network tools for NetOps MCP.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
+
 from mcp.types import TextContent as Content
+
 from ..base import NetOpsTool
 
 
 class NetworkTools(NetOpsTool):
     """Tools for system network analysis."""
 
-    def ss_connections(self, state: Optional[str] = None, protocol: Optional[str] = None) -> List[Content]:
+    def ss_connections(
+        self, state: Optional[str] = None, protocol: Optional[str] = None
+    ) -> List[Content]:
         """Show network connections using ss.
 
         Args:
@@ -21,42 +25,44 @@ class NetworkTools(NetOpsTool):
             List of Content objects with ss results
         """
         try:
-            command = ['ss', '-tuln']
-            
+            command = ["ss", "-tuln"]
+
             if state:
                 # Use proper ss state filtering
-                if state.lower() == 'listen':
-                    command = ['ss', '-tuln', '-l']
-                elif state.lower() == 'established':
-                    command = ['ss', '-tuln', '-o', 'state established']
-                elif state.lower() == 'time_wait':
-                    command = ['ss', '-tuln', '-o', 'state time-wait']
-                elif state.lower() == 'close_wait':
-                    command = ['ss', '-tuln', '-o', 'state close-wait']
-            
+                if state.lower() == "listen":
+                    command = ["ss", "-tuln", "-l"]
+                elif state.lower() == "established":
+                    command = ["ss", "-tuln", "-o", "state established"]
+                elif state.lower() == "time_wait":
+                    command = ["ss", "-tuln", "-o", "state time-wait"]
+                elif state.lower() == "close_wait":
+                    command = ["ss", "-tuln", "-o", "state close-wait"]
+
             if protocol:
-                if protocol.lower() == 'tcp':
-                    command = ['ss', '-tln']
-                elif protocol.lower() == 'udp':
-                    command = ['ss', '-uln']
-            
+                if protocol.lower() == "tcp":
+                    command = ["ss", "-tln"]
+                elif protocol.lower() == "udp":
+                    command = ["ss", "-uln"]
+
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "state": state,
                 "protocol": protocol,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "ss_connections")
-            
+
         except Exception as e:
             return self._handle_error("ss connections", e)
 
-    def netstat_connections(self, state: Optional[str] = None, protocol: Optional[str] = None) -> List[Content]:
+    def netstat_connections(
+        self, state: Optional[str] = None, protocol: Optional[str] = None
+    ) -> List[Content]:
         """Show network connections using netstat.
 
         Args:
@@ -67,30 +73,30 @@ class NetworkTools(NetOpsTool):
             List of Content objects with netstat results
         """
         try:
-            command = ['netstat', '-tuln']
-            
+            command = ["netstat", "-tuln"]
+
             if state:
-                command.extend(['--state', state])
-            
+                command.extend(["--state", state])
+
             if protocol:
-                if protocol.lower() == 'tcp':
-                    command = ['netstat', '-tln']
-                elif protocol.lower() == 'udp':
-                    command = ['netstat', '-uln']
-            
+                if protocol.lower() == "tcp":
+                    command = ["netstat", "-tln"]
+                elif protocol.lower() == "udp":
+                    command = ["netstat", "-uln"]
+
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "state": state,
                 "protocol": protocol,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "netstat_connections")
-            
+
         except Exception as e:
             return self._handle_error("netstat connections", e)
 
@@ -101,18 +107,18 @@ class NetworkTools(NetOpsTool):
             List of Content objects with ARP table
         """
         try:
-            command = ['arp', '-a']
+            command = ["arp", "-a"]
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "arp_table")
-            
+
         except Exception as e:
             return self._handle_error("arp table", e)
 
@@ -134,19 +140,19 @@ class NetworkTools(NetOpsTool):
             # privileged-gated — arping rides the NET_RAW capability layer.
             self._enforce_ssrf(host)
 
-            command = ['arping', '-c', str(count), host]
+            command = ["arping", "-c", str(count), host]
             result = self._execute_command(command, 30)
-            
+
             response_data = {
                 "host": host,
                 "count": count,
                 "success": result["success"],
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
-                "return_code": result["return_code"]
+                "return_code": result["return_code"],
             }
-            
+
             return self._format_response(response_data, "arping_host")
-            
+
         except Exception as e:
             return self._handle_error("arping host", e)

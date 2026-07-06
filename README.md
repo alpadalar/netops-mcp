@@ -1,7 +1,7 @@
 # NetOps MCP
 
-[![Tests](https://img.shields.io/github/actions/workflow/status/alpadalar/NetOpsMCP/test.yml?label=tests)](https://github.com/alpadalar/NetOpsMCP/actions/workflows/test.yml)
-[![Lint](https://img.shields.io/github/actions/workflow/status/alpadalar/NetOpsMCP/lint.yml?label=lint)](https://github.com/alpadalar/NetOpsMCP/actions/workflows/lint.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/alpadalar/netops-mcp/test.yml?label=tests)](https://github.com/alpadalar/netops-mcp/actions/workflows/test.yml)
+[![Lint](https://img.shields.io/github/actions/workflow/status/alpadalar/netops-mcp/lint.yml?label=lint)](https://github.com/alpadalar/netops-mcp/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes
@@ -32,8 +32,8 @@ server with auth, rate limiting, and metrics).
 ## Installation
 
 ```bash
-git clone https://github.com/alpadalar/NetOpsMCP.git
-cd NetOpsMCP
+git clone https://github.com/alpadalar/netops-mcp.git
+cd netops-mcp
 
 # Using uv (recommended)
 uv venv
@@ -171,7 +171,7 @@ Add to `claude_desktop_config.json` (Claude Desktop) or `.cursor/mcp.json`
     "netops-mcp": {
       "command": "uv",
       "args": ["run", "netops-mcp"],
-      "cwd": "/absolute/path/to/NetOpsMCP"
+      "cwd": "/absolute/path/to/netops-mcp"
     }
   }
 }

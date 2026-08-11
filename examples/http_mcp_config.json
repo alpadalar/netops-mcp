@@ -1,8 +1,12 @@
 {
   "_comment": "HTTP (streamable) transport. Start the server first with 'python -m netops_mcp.server_http' (or 'docker compose up'), then point your MCP client at its URL. Use this url form instead of command/args: 'python -m netops_mcp.server_http' speaks HTTP on a port, not stdio. For stdio, see cursor_mcp_config.json.",
+  "_auth": "security.require_auth defaults to true, so the server answers 401 without a key. Generate one and register its hash with 'python scripts/generate_api_key.py --hash --config config/config.json', then put the PLAIN key below (the config file stores only the sha256 digest). X-API-Key works too. Only drop this header if you have deliberately set security.require_auth to false.",
   "mcpServers": {
     "netops-mcp": {
-      "url": "http://localhost:8815/netops-mcp"
+      "url": "http://localhost:8815/netops-mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
     }
   }
 }

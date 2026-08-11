@@ -127,3 +127,82 @@ class TestRateLimiter:
             "used": 2,
             "window_seconds": 60,
         }
+
+
+class TestBucketEviction:
+    """Idle client buckets are evicted so the map stays bounded (SEC-*)."""
+
+    @staticmethod
+    def _limiter(clock, **kwargs):
+        return RateLimiter(time_func=lambda: clock["t"], **kwargs)
+
+    def test_empty_bucket_is_dropped_not_kept(self):
+        """A client whose requests all age out leaves no bucket behind."""
+        clock = {"t": 1000.0}
+        rl = self._limiter(clock, requests_per_window=5, window_seconds=60)
+
+        asyncio.run(rl.is_allowed("c"))
+        assert "c" in rl.requests
+
+        # Past the window: the stale timestamp is dropped along with the
+        # bucket itself, then the new request re-creates it with one entry.
+        clock["t"] += 61
+        asyncio.run(rl.is_allowed("c"))
+        assert rl.requests["c"] == [clock["t"]]
+
+    def test_rotating_clients_do_not_grow_the_map(self):
+        """The periodic sweep evicts clients that never come back."""
+        clock = {"t": 1000.0}
+        rl = self._limiter(clock, requests_per_window=5, window_seconds=60)
+
+        # 50 one-shot clients, each seen once and never again.
+        for i in range(50):
+            asyncio.run(rl.is_allowed(f"ip:10.0.0.{i}"))
+        assert len(rl.requests) == 50
+
+        # Advance past the window so the next request triggers the sweep.
+        clock["t"] += 61
+        asyncio.run(rl.is_allowed("ip:10.0.1.1"))
+
+        # Every stale bucket is gone; only the current caller remains.
+        assert set(rl.requests) == {"ip:10.0.1.1"}
+
+    def test_sweep_preserves_active_clients(self):
+        """A client with in-window traffic survives the sweep with its count."""
+        clock = {"t": 1000.0}
+        rl = self._limiter(clock, requests_per_window=5, window_seconds=60)
+
+        asyncio.run(rl.is_allowed("stale"))
+
+        # Move most of the way through the window, then keep 'active' busy.
+        clock["t"] += 40
+        asyncio.run(rl.is_allowed("active"))
+
+        # Cross the sweep threshold: 'stale' has aged out, 'active' has not.
+        clock["t"] += 25
+        asyncio.run(rl.is_allowed("other"))
+
+        assert "stale" not in rl.requests
+        assert rl.requests["active"] == [1040.0]
+
+    def test_sweep_does_not_reset_an_active_limit(self):
+        """Eviction must not hand a throttled client a fresh allowance."""
+        clock = {"t": 1000.0}
+        rl = self._limiter(clock, requests_per_window=2, window_seconds=60)
+
+        assert asyncio.run(rl.is_allowed("c"))[0] is True
+        assert asyncio.run(rl.is_allowed("c"))[0] is True
+
+        # Far enough for the sweep to run, but still inside c's window.
+        clock["t"] += 59
+        assert asyncio.run(rl.is_allowed("c"))[0] is False
+
+    def test_get_stats_does_not_resurrect_a_bucket(self):
+        """Reading stats for an unknown client must not create a bucket."""
+        clock = {"t": 1000.0}
+        rl = self._limiter(clock, requests_per_window=5, window_seconds=60)
+
+        stats = asyncio.run(rl.get_stats("never-seen"))
+
+        assert stats["used"] == 0
+        assert rl.requests == {}

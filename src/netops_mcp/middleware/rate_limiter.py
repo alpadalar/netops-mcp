@@ -8,8 +8,7 @@ Supports per-API-key rate limiting and configurable limits per endpoint.
 import asyncio
 import logging
 import time
-from collections import defaultdict
-from typing import Awaitable, Callable, Dict, Optional, Tuple
+from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -45,9 +44,12 @@ class RateLimiter:
         """
         self.requests_per_window = requests_per_window
         self.window_seconds = window_seconds
-        self.requests: Dict[str, list[float]] = defaultdict(list)
+        # Plain dict, not defaultdict: reading an unknown client must not
+        # resurrect an empty bucket that the eviction logic just dropped.
+        self.requests: Dict[str, List[float]] = {}
         self._now = time_func
         self._lock = asyncio.Lock()
+        self._last_prune = time_func()
 
         logger.info(
             f"Rate limiter initialized: {requests_per_window} requests per {window_seconds}s"
@@ -57,14 +59,42 @@ class RateLimiter:
         """
         Remove requests outside the current time window.
 
+        Drops the client's bucket entirely once it empties, so a client that
+        stops sending traffic leaves nothing behind.
+
         Args:
             client_id: Client identifier
             current_time: Current timestamp
         """
         cutoff_time = current_time - self.window_seconds
-        self.requests[client_id] = [
-            req_time for req_time in self.requests[client_id] if req_time > cutoff_time
+        recent = [
+            req_time for req_time in self.requests.get(client_id, []) if req_time > cutoff_time
         ]
+        if recent:
+            self.requests[client_id] = recent
+        else:
+            self.requests.pop(client_id, None)
+
+    def _prune_all(self, current_time: float) -> None:
+        """
+        Evict every client whose requests have all aged out of the window.
+
+        Per-client cleanup only runs when that client is seen again, so a
+        caller rotating identifiers (e.g. source IPs) would otherwise grow the
+        map without bound — a memory-exhaustion vector. This sweep caps that
+        growth. Clients with in-window timestamps keep them, so limits are
+        unaffected.
+
+        Args:
+            current_time: Current timestamp
+        """
+        cutoff_time = current_time - self.window_seconds
+        for client_id in list(self.requests):
+            recent = [req_time for req_time in self.requests[client_id] if req_time > cutoff_time]
+            if recent:
+                self.requests[client_id] = recent
+            else:
+                del self.requests[client_id]
 
     async def is_allowed(self, client_id: str) -> Tuple[bool, int, int]:
         """
@@ -82,20 +112,27 @@ class RateLimiter:
         async with self._lock:
             current_time = self._now()
 
+            # Opportunistically evict stale buckets (at most once per window)
+            # so rotating clients that never return cannot grow the map.
+            if current_time - self._last_prune >= self.window_seconds:
+                self._prune_all(current_time)
+                self._last_prune = current_time
+
             # Clean up old requests
             self._cleanup_old_requests(client_id, current_time)
 
             # Count requests in current window
-            request_count = len(self.requests[client_id])
+            bucket = self.requests.get(client_id, [])
+            request_count = len(bucket)
 
             # Check if limit exceeded
             if request_count >= self.requests_per_window:
-                oldest_request = min(self.requests[client_id])
+                oldest_request = min(bucket)
                 reset_time = int(oldest_request + self.window_seconds - current_time)
                 return False, 0, reset_time
 
             # Allow request and record it
-            self.requests[client_id].append(current_time)
+            self.requests.setdefault(client_id, []).append(current_time)
             remaining = self.requests_per_window - request_count - 1
 
             return True, remaining, self.window_seconds
@@ -114,7 +151,7 @@ class RateLimiter:
             current_time = self._now()
             self._cleanup_old_requests(client_id, current_time)
 
-            request_count = len(self.requests[client_id])
+            request_count = len(self.requests.get(client_id, []))
             remaining = max(0, self.requests_per_window - request_count)
 
             return {

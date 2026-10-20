@@ -38,12 +38,18 @@ class DiagnosticsTools(NetOpsTool):
                 raise ValueError("Invalid host provided")
             validate_port(int(port))
             timeout = max(1, min(int(timeout), 60))
-            self._enforce_ssrf(host, int(port))
+            # Pin the connection to the SSRF-classified IP (no second DNS lookup, so
+            # a DNS-rebind between check and connect cannot reach a blocked address).
+            # Fail-closed: an unresolvable host is rejected here.
+            ips = self._enforce_ssrf(host, int(port))
+            if not ips:
+                raise ValidationError(f"could not resolve {host}")
+            connect_ip = str(ips[0])
 
             result: Dict[str, Any] = {"host": host, "port": int(port), "verified": True}
             ctx = ssl.create_default_context()
             try:
-                with socket.create_connection((host, int(port)), timeout=timeout) as raw:
+                with socket.create_connection((connect_ip, int(port)), timeout=timeout) as raw:
                     with ctx.wrap_socket(raw, server_hostname=host) as tls:
                         cert = tls.getpeercert() or {}
                         cipher = tls.cipher()

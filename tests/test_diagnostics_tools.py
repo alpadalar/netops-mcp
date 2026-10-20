@@ -46,7 +46,7 @@ def test_tls_summarizes_certificate(tools):
     ctx = MagicMock()
     ctx.wrap_socket.return_value = tls
     with (
-        patch.object(tools, "_enforce_ssrf", return_value=[]),
+        patch.object(tools, "_enforce_ssrf", return_value=["93.184.216.34"]),
         patch("ssl.create_default_context", return_value=ctx),
         patch("socket.create_connection") as cc,
     ):
@@ -65,7 +65,7 @@ def test_tls_reports_verification_failure(tools):
     err.verify_message = "certificate has expired"
     ctx.wrap_socket.side_effect = err
     with (
-        patch.object(tools, "_enforce_ssrf", return_value=[]),
+        patch.object(tools, "_enforce_ssrf", return_value=["93.184.216.34"]),
         patch("ssl.create_default_context", return_value=ctx),
         patch("socket.create_connection") as cc,
     ):
@@ -78,7 +78,7 @@ def test_tls_reports_verification_failure(tools):
 
 def test_tls_timeout_is_structured_error(tools):
     with (
-        patch.object(tools, "_enforce_ssrf", return_value=[]),
+        patch.object(tools, "_enforce_ssrf", return_value=["93.184.216.34"]),
         patch("socket.create_connection", side_effect=socket.timeout()),
     ):
         assert _load(tools.tls_certificate_check("example.com"))["error"] is True
@@ -159,3 +159,34 @@ def test_email_dns_check_findings(tools):
 
 def test_email_dns_check_invalid_domain(tools):
     assert _load(tools.email_dns_check("bad domain!"))["error"] is True
+
+
+def test_tls_connects_to_pinned_ip_not_hostname(tools):
+    """Rebind regression: connect to the classified IP, keep SNI/verification on host."""
+    ctx = MagicMock()
+    tls = MagicMock()
+    tls.getpeercert.return_value = {}
+    tls.cipher.return_value = None
+    tls.__enter__ = lambda s: s
+    tls.__exit__ = lambda *a: False
+    ctx.wrap_socket.return_value = tls
+    with (
+        patch.object(tools, "_enforce_ssrf", return_value=["93.184.216.34"]),
+        patch("ssl.create_default_context", return_value=ctx),
+        patch("socket.create_connection") as cc,
+    ):
+        cc.return_value.__enter__ = lambda s: s
+        cc.return_value.__exit__ = lambda *a: False
+        tools.tls_certificate_check("rebind.example.com")
+    assert cc.call_args[0][0] == ("93.184.216.34", 443)
+    assert ctx.wrap_socket.call_args.kwargs["server_hostname"] == "rebind.example.com"
+
+
+def test_tls_fails_closed_when_unresolvable(tools):
+    with (
+        patch.object(tools, "_enforce_ssrf", return_value=[]),
+        patch("socket.create_connection") as cc,
+    ):
+        out = _load(tools.tls_certificate_check("nx.invalid"))
+    assert out["error"] is True
+    cc.assert_not_called()

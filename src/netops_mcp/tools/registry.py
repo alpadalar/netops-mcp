@@ -67,7 +67,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         headers: Annotated[Optional[dict], Field(description="HTTP headers")] = None,
         data: Annotated[Optional[str], Field(description="Request body")] = None,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
-    ):
+    ) -> Any:
         return tools.http_tools.curl_request(url, method, headers, data, timeout)
 
     @_tool(description="Execute HTTP request using httpie")
@@ -77,7 +77,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         headers: Annotated[Optional[dict], Field(description="HTTP headers")] = None,
         data: Annotated[Optional[dict], Field(description="Request data")] = None,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
-    ):
+    ) -> Any:
         return tools.http_tools.httpie_request(url, method, headers, data, timeout)
 
     @_tool(description="Test API endpoint with validation")
@@ -89,7 +89,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         ] = 200,
         headers: Annotated[Optional[dict], Field(description="HTTP headers")] = None,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
-    ):
+    ) -> Any:
         return tools.http_tools.api_test(url, method, expected_status, headers, timeout)
 
     # Network Connectivity Tools
@@ -98,7 +98,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         host: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of ping packets", default=4)] = 4,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
-    ):
+    ) -> Any:
         return tools.connectivity_tools.ping_host(host, count, timeout)
 
     @_tool(description="Perform traceroute to a target")
@@ -106,7 +106,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         target: Annotated[str, Field(description="Target host")],
         max_hops: Annotated[int, Field(description="Maximum number of hops", default=30)] = 30,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
-    ):
+    ) -> Any:
         return tools.connectivity_tools.traceroute_path(target, max_hops, timeout)
 
     @_tool(description="Monitor network path using mtr")
@@ -114,7 +114,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         target: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of probes", default=10)] = 10,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
-    ):
+    ) -> Any:
         return tools.connectivity_tools.mtr_monitor(target, count, timeout)
 
     @_tool(description="Test port connectivity using telnet")
@@ -122,7 +122,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="Target port")],
         timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
-    ):
+    ) -> Any:
         return tools.connectivity_tools.telnet_connect(host, port, timeout)
 
     @_tool(description="Test port connectivity using netcat")
@@ -130,7 +130,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="Target port")],
         timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
-    ):
+    ) -> Any:
         return tools.connectivity_tools.netcat_test(host, port, timeout)
 
     # DNS Tools
@@ -139,7 +139,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
         server: Annotated[Optional[str], Field(description="DNS server")] = None,
-    ):
+    ) -> Any:
         return tools.dns_tools.nslookup_query(domain, record_type, server)
 
     @_tool(description="Perform DNS lookup using dig")
@@ -147,14 +147,14 @@ def register_tools(mcp: Any, tools: Any) -> int:
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
         server: Annotated[Optional[str], Field(description="DNS server")] = None,
-    ):
+    ) -> Any:
         return tools.dns_tools.dig_query(domain, record_type, server)
 
     @_tool(description="Perform DNS lookup using host")
     def host_lookup(
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
-    ):
+    ) -> Any:
         return tools.dns_tools.host_lookup(domain, record_type)
 
     # Additional diagnostics (v1.2)
@@ -163,28 +163,28 @@ def register_tools(mcp: Any, tools: Any) -> int:
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="TLS port", default=443)] = 443,
         timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
-    ):
+    ) -> Any:
         return tools.diagnostics_tools.tls_certificate_check(host, port, timeout)
 
     @_tool(description="WHOIS lookup for a domain or IP address")
     def whois_lookup(
         query: Annotated[str, Field(description="Domain name or IP address")],
         timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
-    ):
+    ) -> Any:
         return tools.diagnostics_tools.whois_lookup(query, timeout)
 
     @_tool(description="Reverse DNS (PTR) lookup with forward confirmation")
     def reverse_dns_lookup(
         ip: Annotated[str, Field(description="IPv4 or IPv6 address")],
         timeout: Annotated[int, Field(description="Timeout in seconds", default=5)] = 5,
-    ):
+    ) -> Any:
         return tools.diagnostics_tools.reverse_dns_lookup(ip, timeout)
 
     @_tool(description="Check MX, SPF, DMARC and optional DKIM DNS records of a domain")
     def email_dns_check(
         domain: Annotated[str, Field(description="Domain to check")],
         dkim_selector: Annotated[Optional[str], Field(description="DKIM selector")] = None,
-    ):
+    ) -> Any:
         return tools.diagnostics_tools.email_dns_check(domain, dkim_selector)
 
     # Network Discovery Tools
@@ -194,14 +194,14 @@ def register_tools(mcp: Any, tools: Any) -> int:
         ports: Annotated[Optional[str], Field(description="Port range (e.g., '22,80,443')")] = None,
         scan_type: Annotated[str, Field(description="Scan type", default="basic")] = "basic",
         timeout: Annotated[int, Field(description="Timeout in seconds", default=300)] = 300,
-    ):
+    ) -> Any:
         return tools.discovery_tools.nmap_scan(target, ports, scan_type, timeout)
 
     @_tool(description="Discover network services")
     def service_discovery(
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[Optional[str], Field(description="Port range")] = None,
-    ):
+    ) -> Any:
         return tools.discovery_tools.service_discovery(target, ports)
 
     # System Network Tools
@@ -209,48 +209,48 @@ def register_tools(mcp: Any, tools: Any) -> int:
     def ss_connections(
         state: Annotated[Optional[str], Field(description="Connection state")] = None,
         protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None,
-    ):
+    ) -> Any:
         return tools.network_tools.ss_connections(state, protocol)
 
     @_tool(description="Show network connections using netstat")
     def netstat_connections(
         state: Annotated[Optional[str], Field(description="Connection state")] = None,
         protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None,
-    ):
+    ) -> Any:
         return tools.network_tools.netstat_connections(state, protocol)
 
     @_tool(description="Show ARP table")
-    def arp_table():
+    def arp_table() -> Any:
         return tools.network_tools.arp_table()
 
     @_tool(description="ARP ping a host")
     def arping_host(
         host: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of packets", default=4)] = 4,
-    ):
+    ) -> Any:
         return tools.network_tools.arping_host(host, count)
 
     # System Monitoring Tools
     @_tool(description="Get system status")
-    def system_status():
+    def system_status() -> Any:
         return tools.monitoring_tools.system_status()
 
     @_tool(description="Get CPU usage information")
-    def cpu_usage():
+    def cpu_usage() -> Any:
         return tools.monitoring_tools.cpu_usage()
 
     @_tool(description="Get memory usage information")
-    def memory_usage():
+    def memory_usage() -> Any:
         return tools.monitoring_tools.memory_usage()
 
     @_tool(description="Get disk usage information")
-    def disk_usage():
+    def disk_usage() -> Any:
         return tools.monitoring_tools.disk_usage()
 
     @_tool(description="List running processes")
     def process_list(
         limit: Annotated[int, Field(description="Number of processes to show", default=20)] = 20,
-    ):
+    ) -> Any:
         return tools.monitoring_tools.process_list(limit)
 
     # Security Tools
@@ -259,19 +259,19 @@ def register_tools(mcp: Any, tools: Any) -> int:
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[str, Field(description="Port range (e.g., '1-1000')")],
         timeout: Annotated[int, Field(description="Timeout in seconds", default=60)] = 60,
-    ):
+    ) -> Any:
         return tools.scanning_tools.port_scan(target, ports, timeout)
 
     @_tool(description="Enumerate services on a target")
     def service_enumeration(
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[Optional[str], Field(description="Port range")] = None,
-    ):
+    ) -> Any:
         return tools.scanning_tools.service_enumeration(target, ports)
 
     # System Tools
     @_tool(description="Check required system tools")
-    def check_required_tools():
+    def check_required_tools() -> Any:
         # Unified body: typed Content envelope (server.py style), with the
         # HTTP server's defensive try/except so a system-check failure returns
         # a structured error instead of propagating.
@@ -290,7 +290,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
             return [Content(type="text", text=json.dumps({"error": str(e)}, indent=2))]
 
     @_tool(description="Health check endpoint")
-    def health():
+    def health() -> Any:
         # Unified body: reports the DYNAMIC tool count (REF-05) plus startup
         # test status. `_tests_passed` is stdio-only state (None on the HTTP
         # server, which never runs startup tests) — acceptable per plan.

@@ -12,7 +12,7 @@ from typing import Awaitable, Callable, Dict, List, Optional, Tuple
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
 from .metrics import metrics_collector
@@ -213,7 +213,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = request.client.host if request.client else "unknown"
         return f"ip:{client_ip}"
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable]):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """
         Process the request and enforce rate limiting.
 

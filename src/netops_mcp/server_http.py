@@ -10,7 +10,7 @@ import os
 import secrets
 import signal
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from fastmcp import FastMCP
@@ -122,8 +122,8 @@ class NetOpsMCPHTTPServer:
         """
         metrics_handler = create_metrics_endpoint()
 
-        @self.mcp.custom_route("/health", methods=["GET"])
-        async def health(request):
+        @self.mcp.custom_route("/health", methods=["GET"])  # type: ignore[untyped-decorator]
+        async def health(request: Any) -> Any:
             """Liveness/readiness endpoint backed by the startup tool cache.
 
             Reads the PERF-03 startup cache (no per-hit subprocess fork) and
@@ -145,12 +145,12 @@ class NetOpsMCPHTTPServer:
                 }
             )
 
-        @self.mcp.custom_route("/metrics", methods=["GET"])
-        async def metrics(request):
+        @self.mcp.custom_route("/metrics", methods=["GET"])  # type: ignore[untyped-decorator]
+        async def metrics(request: Any) -> Any:
             """Prometheus metrics endpoint delegating to the global collector."""
             return await metrics_handler(request)
 
-    def build_http_app(self):
+    def build_http_app(self) -> Any:
         """Build the ACTUALLY-served Starlette app with the middleware stack (REF-07).
 
         The single served app is constructed via
@@ -269,7 +269,7 @@ class NetOpsMCPHTTPServer:
                 '  3. Or explicitly opt out: "require_auth": false  (NOT recommended)\n'
             )
 
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: Any) -> None:
             self.logger.info("Received signal to shutdown HTTP server...")
             sys.exit(0)
 

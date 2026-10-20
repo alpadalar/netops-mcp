@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, List, MutableMapping, Tuple
 
 from ..config.models import LoggingConfig
 
@@ -76,7 +76,7 @@ def setup_logging(config: LoggingConfig, json_format: bool = False) -> logging.L
         log_file = os.path.join(os.getcwd(), log_file)
 
     # Create handlers
-    handlers = []
+    handlers: List[logging.Handler] = []
 
     if log_file:
         file_handler = logging.FileHandler(log_file)
@@ -90,7 +90,7 @@ def setup_logging(config: LoggingConfig, json_format: bool = False) -> logging.L
 
     # Configure formatters
     if json_format:
-        formatter = JSONFormatter()
+        formatter: logging.Formatter = JSONFormatter()
     else:
         formatter = logging.Formatter(config.format)
 
@@ -133,7 +133,9 @@ def get_structured_logger(name: str) -> logging.LoggerAdapter:
     class StructuredLoggerAdapter(logging.LoggerAdapter):
         """Adapter for adding structured fields to logs."""
 
-        def process(self, msg: str, kwargs: Dict[str, Any]) -> tuple:
+        def process(
+            self, msg: str, kwargs: MutableMapping[str, Any]
+        ) -> Tuple[Any, MutableMapping[str, Any]]:
             """Add extra fields to log record."""
             extra = kwargs.get("extra", {})
             if "extra_fields" not in extra:

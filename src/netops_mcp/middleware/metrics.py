@@ -12,7 +12,7 @@ import logging
 import time
 from collections import defaultdict
 from threading import Lock
-from typing import Awaitable, Callable, Dict
+from typing import Awaitable, Callable, Dict, Optional
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -29,7 +29,7 @@ class MetricsCollector:
     Thread-safe metrics collection for HTTP requests and application events.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize metrics collector."""
         self.lock = Lock()
 
@@ -55,7 +55,9 @@ class MetricsCollector:
         self.tool_execution_duration_count: Dict[str, int] = defaultdict(int)
         self.tool_failures_total: Dict[str, int] = defaultdict(int)
 
-    def record_http_request(self, method: str, path: str, status_code: int, duration: float):
+    def record_http_request(
+        self, method: str, path: str, status_code: int, duration: float
+    ) -> None:
         """
         Record an HTTP request.
 
@@ -71,29 +73,29 @@ class MetricsCollector:
             self.http_request_duration_sum[key] += duration
             self.http_request_duration_count[key] += 1
 
-    def inc_requests_in_progress(self):
+    def inc_requests_in_progress(self) -> None:
         """Increment in-progress requests counter."""
         with self.lock:
             self.http_requests_in_progress += 1
 
-    def dec_requests_in_progress(self):
+    def dec_requests_in_progress(self) -> None:
         """Decrement in-progress requests counter."""
         with self.lock:
             self.http_requests_in_progress = max(0, self.http_requests_in_progress - 1)
 
-    def record_auth_attempt(self, success: bool):
+    def record_auth_attempt(self, success: bool) -> None:
         """Record an authentication attempt."""
         with self.lock:
             self.auth_attempts_total += 1
             if not success:
                 self.auth_failures_total += 1
 
-    def record_rate_limit_hit(self):
+    def record_rate_limit_hit(self) -> None:
         """Record a rate limit hit."""
         with self.lock:
             self.rate_limit_hits_total += 1
 
-    def record_tool_execution(self, tool_name: str, duration: float, success: bool):
+    def record_tool_execution(self, tool_name: str, duration: float, success: bool) -> None:
         """
         Record a tool execution.
 
@@ -200,7 +202,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     Tracks request counts, durations, and status codes.
     """
 
-    def __init__(self, app: ASGIApp, collector: MetricsCollector = None):
+    def __init__(self, app: ASGIApp, collector: Optional[MetricsCollector] = None):
         """
         Initialize metrics middleware.
 
@@ -211,7 +213,9 @@ class MetricsMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.collector = collector or metrics_collector
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable]):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         """
         Process request and collect metrics.
 
@@ -249,7 +253,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             self.collector.dec_requests_in_progress()
 
 
-def create_metrics_endpoint(collector: MetricsCollector = None) -> Callable:
+def create_metrics_endpoint(collector: Optional[MetricsCollector] = None) -> Callable:
     """
     Create a metrics endpoint handler.
 

@@ -178,7 +178,8 @@ class HTTPTools(NetOpsTool):
             Dictionary with parsed statistics
         """
         try:
-            return json.loads(output)
+            parsed: Dict[str, Any] = json.loads(output)
+            return parsed
         except json.JSONDecodeError:
             return {"error": "Could not parse curl output"}
 

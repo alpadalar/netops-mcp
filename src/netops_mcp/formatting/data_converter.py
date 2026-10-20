@@ -5,14 +5,14 @@ This module provides utilities for converting data between different formats
 and units.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 
 class DataConverter:
     """Converts data between different formats and units."""
 
     @staticmethod
-    def bytes_to_human_readable(bytes_value: int) -> str:
+    def bytes_to_human_readable(bytes_value: float) -> str:
         """Convert bytes to human readable format.
 
         Args:
@@ -91,7 +91,7 @@ class DataConverter:
         Returns:
             Flattened dictionary
         """
-        items = []
+        items: List[Tuple[str, Any]] = []
         for k, v in data.items():
             new_key = f"{parent_key}{sep}{k}" if parent_key else k
             if isinstance(v, dict):
@@ -110,7 +110,7 @@ class DataConverter:
         Returns:
             Normalized data
         """
-        normalized = {}
+        normalized: Dict[str, Any] = {}
 
         for key, value in data.items():
             if isinstance(value, (int, float)):
@@ -126,7 +126,7 @@ class DataConverter:
         return normalized
 
     @staticmethod
-    def convert_boolean_string(value: str) -> bool:
+    def convert_boolean_string(value: Any) -> bool:
         """Convert string to boolean.
 
         Args:

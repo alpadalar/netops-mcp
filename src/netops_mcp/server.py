@@ -17,7 +17,7 @@ The server exposes a comprehensive set of tools for network operations including
 import os
 import signal
 import sys
-from typing import Optional
+from typing import Any, Optional
 
 from fastmcp import FastMCP
 
@@ -99,7 +99,7 @@ class NetOpsMCPServer:
         """Start the MCP server."""
         import anyio
 
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: Any) -> None:
             self.logger.info("Received signal to shutdown...")
             sys.exit(0)
 
@@ -144,7 +144,7 @@ class NetOpsMCPServer:
             sys.exit(1)
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     import argparse
 

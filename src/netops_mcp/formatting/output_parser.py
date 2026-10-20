@@ -22,7 +22,7 @@ class OutputParser:
         Returns:
             Dictionary with parsed ping statistics
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "packets_transmitted": 0,
             "packets_received": 0,
             "packet_loss_percent": 0,
@@ -104,7 +104,12 @@ class OutputParser:
                     if len(parts) > 2 and parts[2].startswith("(") and parts[2].endswith(")"):
                         ip = parts[2][1:-1]
                         times_start = 3
-                    hop_info = {"hop_number": hop_number, "host": parts[1], "ip": ip, "times": []}
+                    hop_info: Dict[str, Any] = {
+                        "hop_number": hop_number,
+                        "host": parts[1],
+                        "ip": ip,
+                        "times": [],
+                    }
 
                     # Extract response times
                     for part in parts[times_start:]:
@@ -128,7 +133,7 @@ class OutputParser:
         Returns:
             Dictionary with mtr statistics
         """
-        stats = {"target": "", "hops": []}
+        stats: Dict[str, Any] = {"target": "", "hops": []}
 
         lines = output.split("\n")
         for line in lines:
@@ -145,7 +150,7 @@ class OutputParser:
                     # number parses instead of every line being skipped.
                     hop_token = parts[0].rstrip(".|-")  # "1.|--" -> "1"
                     hop_num = int(hop_token)
-                    hop_info = {
+                    hop_info: Dict[str, Any] = {
                         "hop": hop_num,
                         "host": parts[1],
                         "loss_percent": float(parts[2].rstrip("%")),

@@ -12,7 +12,7 @@ time instead of being silently dropped.
 """
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -111,6 +111,7 @@ class NetworkConfig(BaseModel):
             raise ValueError(
                 "allowed_ports may contain only digits, commas, and hyphens " '(e.g. "1-1024,8080")'
             )
+        candidates: Tuple[int, ...]
         for part in spec.split(","):
             part = part.strip()
             if not part:

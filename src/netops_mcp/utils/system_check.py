@@ -7,7 +7,7 @@ required tools availability.
 
 import platform
 import subprocess
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import psutil
 
@@ -72,7 +72,7 @@ def _get_tool_check_command(tool_name: str) -> List[str]:
     return _TOOL_CHECK_COMMANDS.get(tool_name, [tool_name, "--version"])
 
 
-def check_required_tools(tools: List[str] = None) -> Dict[str, Any]:
+def check_required_tools(tools: Optional[List[str]] = None) -> Dict[str, Any]:
     """Check if required system tools are available.
 
     Args:
@@ -136,7 +136,7 @@ def get_tool_version(tool_name: str) -> str:
         result = _run(_get_tool_check_command(tool_name), capture_output=True, text=True, timeout=5)
 
         if result.returncode == 0:
-            version_line = result.stdout.split("\n")[0]
+            version_line = str(result.stdout.split("\n")[0])
             return version_line
         else:
             return "Unknown"
@@ -215,7 +215,7 @@ def get_network_interfaces() -> Dict[str, List[Dict[str, str]]]:
         Dictionary mapping interface names to their addresses
     """
     try:
-        interfaces = {}
+        interfaces: Dict[str, List[Dict[str, str]]] = {}
         for interface, addrs in psutil.net_if_addrs().items():
             interfaces[interface] = []
             for addr in addrs:
@@ -227,7 +227,7 @@ def get_network_interfaces() -> Dict[str, List[Dict[str, str]]]:
         return {}
 
 
-def get_disk_usage(path: str = "/") -> Dict[str, int]:
+def get_disk_usage(path: str = "/") -> Dict[str, Any]:
     """Get disk usage information for a path.
 
     Args:
@@ -248,7 +248,7 @@ def get_disk_usage(path: str = "/") -> Dict[str, int]:
         return {"total": 0, "used": 0, "free": 0, "percent": 0.0}
 
 
-def get_memory_info() -> Dict[str, int]:
+def get_memory_info() -> Dict[str, Any]:
     """Get memory information.
 
     Returns:

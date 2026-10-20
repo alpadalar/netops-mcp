@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- Four new tools (the server now exposes 30): `tls_certificate_check`
+  (verified handshake, subject/issuer/SANs/expiry), `whois_lookup`,
+  `reverse_dns_lookup` (PTR with forward confirmation) and `email_dns_check`
+  (MX, SPF, DMARC, optional DKIM). All inputs are validated; connection
+  targets go through the SSRF policy.
+
+### Changed
+
+- **Breaking (runtime):** Python >= 3.11 is now required (Python 3.10 is end
+  of life; starlette 1.x and dnspython 2.9 require 3.11). CI covers 3.11-3.14.
+- Dependencies upgraded: `mcp` 2.x, `fastmcp` 4.x, `starlette` 1.x,
+  `uvicorn` 0.54, `pydantic` 2.14, `psutil` 7, `rich` 15, `dnspython` 2.9,
+  plus the dev toolchain (black 26, ruff 0.17, mypy 2). The stdio server now
+  uses the standalone `fastmcp` package like the HTTP server.
+- Tool names, parameters, types, required fields and defaults of the original
+  26 tools are unchanged. fastmcp 4 emits slightly different JSON schemas:
+  `title` keys are dropped and `additionalProperties: false` is added, so
+  unknown arguments are now rejected by clients/servers that validate strictly.
+- CI actions bumped (`setup-python` v7); the Docker image uses Python 3.13.
+
 ## [0.1.0] - 2026-07-05
 
 First public release of NetOpsMCP — a Python/FastMCP-based network operations

@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes
-26 network and system diagnostic tools — `ping`, `traceroute`, `mtr`, `nmap`,
+30 network and system diagnostic tools — `ping`, `traceroute`, `mtr`, `nmap`,
 DNS queries, HTTP requests, and system monitoring — to MCP clients such as
 Claude Desktop, Claude Code, and Cursor. Each tool is a thin, input-validated
 wrapper around a standard OS utility. Two transports are supported: **stdio**
@@ -15,7 +15,8 @@ server with auth, rate limiting, and metrics).
 ## Features
 
 - **Connectivity** — `ping`, `traceroute`, `mtr`, `telnet`, `netcat`
-- **DNS** — `nslookup`, `dig`, `host`
+- **DNS** — `nslookup`, `dig`, `host`, `reverse_dns_lookup`, `email_dns_check` (MX/SPF/DMARC/DKIM)
+- **TLS & registry** — `tls_certificate_check`, `whois_lookup`
 - **HTTP / API** — `curl`, `httpie`, `api_test`
 - **Discovery & scanning** — `nmap_scan`, `service_discovery`, `port_scan`, `service_enumeration`
 - **Network state** — `ss`, `netstat`, `arp`, `arping`

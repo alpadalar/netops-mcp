@@ -2,8 +2,8 @@
 Comprehensive tests for DNS tools functionality.
 """
 
-
 import pytest
+
 from netops_mcp.tools.network.dns_tools import DNSTools
 
 

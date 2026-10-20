@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "netops-mcp"
 version = "0.1.0"
 description = "A Model Context Protocol server for Network Operations and infrastructure diagnostic tools"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     {name = "Alperen Adalar", email = "alp.adalar@gmail.com"}
 ]
@@ -19,9 +19,10 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Systems Administration",
     "Topic :: System :: Networking :: Monitoring",
@@ -29,37 +30,37 @@ classifiers = [
 ]
 
 dependencies = [
-    "mcp>=1.12.4,<2.0.0",
-    "requests>=2.31.0,<3.0.0",
-    "pydantic>=2.0.0,<3.0.0",
-    "fastmcp>=2.11.3,<2.12",
-    "asgiref>=3.7.0",
-    "psutil>=5.9.0,<6.0.0",
-    "dnspython>=2.4.0,<3.0.0",
+    "mcp>=2.3.0,<3.0.0",
+    "requests>=2.34.0,<3.0.0",
+    "pydantic>=2.14.0,<3.0.0",
+    "fastmcp>=4.1.2,<5.0.0",
+    "asgiref>=3.12.0",
+    "psutil>=7.2.0,<8.0.0",
+    "dnspython>=2.9.0,<3.0.0",
     "python-nmap>=0.7.1,<1.0.0",
     "httpx>=0.24.0,<1.0.0",
-    "rich>=13.0.0,<14.0.0",
-    "click>=8.1.0,<9.0.0",
-    "starlette>=0.35.0,<1.0.0",
-    "python-dotenv>=1.0.0,<2.0.0",
+    "rich>=15.0.0,<16.0.0",
+    "click>=8.5.0,<9.0.0",
+    "starlette>=1.9.0,<2.0.0",
+    "python-dotenv>=1.2.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=9,<10",
-    "black>=23.0.0,<25.0.0",
-    "mypy>=1.0.0,<2.0.0",
+    "black>=26.0.0,<27.0.0",
+    "mypy>=2.0.0,<3.0.0",
     "pytest-asyncio>=1.4,<2",
-    "ruff>=0.1.0,<1.0.0",
+    "ruff>=0.17.0,<1.0.0",
     "types-requests>=2.31.0,<3.0.0",
     "pytest-mock>=3.11.0,<4.0.0",
     "pytest-cov>=7,<8",
-    "bandit>=1.7.5,<2.0.0",
-    "safety>=2.3.0,<4.0.0",
-    "coverage>=7.2.0,<8.0.0",
+    "bandit>=1.9.0,<2.0.0",
+    "safety>=3.8.0,<4.0.0",
+    "coverage>=7.16.0,<8.0.0",
 ]
 django = [
-    "django>=4.0.0,<5.0.0",
+    "django>=4.0.0,<6.0.0",
     "djangorestframework>=3.14.0",
     "pyjwt>=2.8.0",
 ]
@@ -101,7 +102,7 @@ filterwarnings = [
 # mcp/fastmcp SDK's match statements trigger under py39. mypy stays ADVISORY in CI
 # (continue-on-error) — the ~95 pre-existing strict errors are out of the frozen-
 # behavior release scope and are not addressed here.
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -121,12 +122,14 @@ module = ["mcp.*", "fastmcp.*"]
 follow_imports = "skip"
 
 [tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
 select = ["E", "F", "B", "I"]
 ignore = []
-line-length = 100
-target-version = "py310"
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 # REL-08 accept-and-document: these residuals are behavior-frozen and not worth a
 # risky reflow/restructure for a format-only release-quality pass.
 # E402 — deliberate `sys.path.insert(...)` before imports so tests import from src/.
@@ -141,4 +144,4 @@ target-version = "py310"
 
 [tool.black]
 line-length = 100
-target-version = ['py310']
+target-version = ['py311']

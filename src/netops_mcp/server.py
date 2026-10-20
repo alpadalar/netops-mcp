@@ -19,7 +19,7 @@ import signal
 import sys
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from .config.loader import load_config
 from .core.logging import setup_logging

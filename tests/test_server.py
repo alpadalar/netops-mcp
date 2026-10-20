@@ -10,6 +10,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
+
 from netops_mcp.server import NetOpsMCPServer
 
 # Fake system-check results with REAL tool names — shape mirrors
@@ -112,10 +113,10 @@ class TestNetOpsMCPServer:
         handlers (including pytest's caplog handler) — without this patch,
         caplog captures nothing regardless of the fix.
         """
-        with patch(
-            "netops_mcp.server.check_tools_status", return_value=dict(FAKE_TOOL_STATUS)
-        ), patch("netops_mcp.server.get_system_info", return_value=dict(FAKE_SYSTEM_INFO)), patch(
-            "netops_mcp.server.setup_logging", lambda cfg: logging.getLogger("netops-mcp")
+        with (
+            patch("netops_mcp.server.check_tools_status", return_value=dict(FAKE_TOOL_STATUS)),
+            patch("netops_mcp.server.get_system_info", return_value=dict(FAKE_SYSTEM_INFO)),
+            patch("netops_mcp.server.setup_logging", lambda cfg: logging.getLogger("netops-mcp")),
         ):
             with caplog.at_level(logging.WARNING):
                 NetOpsMCPServer(self.temp_config.name)
@@ -150,19 +151,19 @@ class TestNetOpsMCPServer:
         """
         from netops_mcp.server_http import NetOpsMCPHTTPServer
 
-        with patch(
-            "netops_mcp.tools.registry.check_tools_status", return_value=dict(FAKE_TOOL_STATUS)
-        ), patch(
-            "netops_mcp.tools.registry.get_system_info", return_value=dict(FAKE_SYSTEM_INFO)
-        ), patch(
-            "netops_mcp.server_http.check_tools_status", return_value=dict(FAKE_TOOL_STATUS)
+        with (
+            patch(
+                "netops_mcp.tools.registry.check_tools_status", return_value=dict(FAKE_TOOL_STATUS)
+            ),
+            patch("netops_mcp.tools.registry.get_system_info", return_value=dict(FAKE_SYSTEM_INFO)),
+            patch("netops_mcp.server_http.check_tools_status", return_value=dict(FAKE_TOOL_STATUS)),
         ):
             # 03-04 deleted _setup_health_check; the PERF-03 startup cache call
             # (server_http.check_tools_status) is patched instead so construction
             # forks no subprocesses.
             server = NetOpsMCPHTTPServer()
-            tools = asyncio.run(server.mcp.get_tools())
-            # fastmcp 2.11.3 FunctionTool keeps the original closure on `fn`
+            tools = {t.name: t for t in asyncio.run(server.mcp.list_tools())}
+            # fastmcp FunctionTool keeps the original closure on `fn`
             result = tools["check_required_tools"].fn()
 
         assert "recursion" not in result[0].text.lower()

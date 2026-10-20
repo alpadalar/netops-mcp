@@ -21,41 +21,13 @@ old hardcoded literal ``26``.
 """
 
 import json
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Callable, List, Optional
 
 from mcp.types import TextContent as Content
 from pydantic import Field
 
 from ..utils.system_check import check_required_tools as check_tools_status
 from ..utils.system_check import get_system_info
-
-
-def _registered_tool_count(mcp: Any) -> int:
-    """Best-effort count of tools registered on a FastMCP instance (REF-05, WR-03).
-
-    REF-05 derives the tool count dynamically instead of hardcoding ``26``. Both
-    the stdio SDK ``mcp.server.fastmcp.FastMCP`` and the standalone
-    ``fastmcp.FastMCP`` expose that count only through the private
-    ``_tool_manager._tools`` mapping at the pinned versions (mcp 1.13.0 /
-    fastmcp 2.11.3). There is no SYNC public accessor that works uniformly across
-    both — the SDK's ``_tool_manager.list_tools()`` is synchronous but fastmcp's
-    is a coroutine, and this helper is called from synchronous code (registration
-    return and the ``health`` tool).
-
-    WR-03: the private access is therefore wrapped defensively. An upstream
-    rename of ``_tool_manager`` or ``_tools`` (the ``mcp`` SDK tracks GitHub HEAD
-    per CLAUDE.md) degrades this to a graceful ``0`` instead of raising
-    ``AttributeError`` at registration return / inside the ``health`` tool. The
-    focused guard test in ``tests/test_registry.py`` asserts the private path
-    still exists on BOTH FastMCP classes, so an SDK bump fails LOUDLY in CI
-    rather than silently reporting a zero tool count at runtime.
-    """
-    tool_mgr = getattr(mcp, "_tool_manager", None)
-    tools = getattr(tool_mgr, "_tools", None)
-    try:
-        return len(tools) if tools is not None else 0
-    except TypeError:
-        return 0
 
 
 def register_tools(mcp: Any, tools: Any) -> int:
@@ -76,8 +48,19 @@ def register_tools(mcp: Any, tools: Any) -> int:
         ``self.tool_count``) instead of hardcoding ``26``.
     """
 
+    # The tool count is tracked by registration itself (REF-05) instead of
+    # reaching into FastMCP private internals, which changed across majors.
+    registered: List[str] = []
+
+    def _tool(**kwargs: Any) -> Callable[[Callable[..., Any]], Any]:
+        def decorator(fn: Callable[..., Any]) -> Any:
+            registered.append(fn.__name__)
+            return mcp.tool(**kwargs)(fn)
+
+        return decorator
+
     # HTTP/API Testing Tools
-    @mcp.tool(description="Execute HTTP request using curl")
+    @_tool(description="Execute HTTP request using curl")
     def curl_request(
         url: Annotated[str, Field(description="Target URL")],
         method: Annotated[str, Field(description="HTTP method", default="GET")] = "GET",
@@ -87,7 +70,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.http_tools.curl_request(url, method, headers, data, timeout)
 
-    @mcp.tool(description="Execute HTTP request using httpie")
+    @_tool(description="Execute HTTP request using httpie")
     def httpie_request(
         url: Annotated[str, Field(description="Target URL")],
         method: Annotated[str, Field(description="HTTP method", default="GET")] = "GET",
@@ -97,7 +80,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.http_tools.httpie_request(url, method, headers, data, timeout)
 
-    @mcp.tool(description="Test API endpoint with validation")
+    @_tool(description="Test API endpoint with validation")
     def api_test(
         url: Annotated[str, Field(description="API endpoint URL")],
         method: Annotated[str, Field(description="HTTP method", default="GET")] = "GET",
@@ -110,7 +93,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return tools.http_tools.api_test(url, method, expected_status, headers, timeout)
 
     # Network Connectivity Tools
-    @mcp.tool(description="Ping a host to test connectivity")
+    @_tool(description="Ping a host to test connectivity")
     def ping_host(
         host: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of ping packets", default=4)] = 4,
@@ -118,7 +101,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.connectivity_tools.ping_host(host, count, timeout)
 
-    @mcp.tool(description="Perform traceroute to a target")
+    @_tool(description="Perform traceroute to a target")
     def traceroute_path(
         target: Annotated[str, Field(description="Target host")],
         max_hops: Annotated[int, Field(description="Maximum number of hops", default=30)] = 30,
@@ -126,7 +109,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.connectivity_tools.traceroute_path(target, max_hops, timeout)
 
-    @mcp.tool(description="Monitor network path using mtr")
+    @_tool(description="Monitor network path using mtr")
     def mtr_monitor(
         target: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of probes", default=10)] = 10,
@@ -134,7 +117,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.connectivity_tools.mtr_monitor(target, count, timeout)
 
-    @mcp.tool(description="Test port connectivity using telnet")
+    @_tool(description="Test port connectivity using telnet")
     def telnet_connect(
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="Target port")],
@@ -142,7 +125,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.connectivity_tools.telnet_connect(host, port, timeout)
 
-    @mcp.tool(description="Test port connectivity using netcat")
+    @_tool(description="Test port connectivity using netcat")
     def netcat_test(
         host: Annotated[str, Field(description="Target host")],
         port: Annotated[int, Field(description="Target port")],
@@ -151,7 +134,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return tools.connectivity_tools.netcat_test(host, port, timeout)
 
     # DNS Tools
-    @mcp.tool(description="Perform DNS lookup using nslookup")
+    @_tool(description="Perform DNS lookup using nslookup")
     def nslookup_query(
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
@@ -159,7 +142,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.dns_tools.nslookup_query(domain, record_type, server)
 
-    @mcp.tool(description="Perform DNS lookup using dig")
+    @_tool(description="Perform DNS lookup using dig")
     def dig_query(
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
@@ -167,7 +150,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.dns_tools.dig_query(domain, record_type, server)
 
-    @mcp.tool(description="Perform DNS lookup using host")
+    @_tool(description="Perform DNS lookup using host")
     def host_lookup(
         domain: Annotated[str, Field(description="Domain to lookup")],
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
@@ -175,7 +158,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return tools.dns_tools.host_lookup(domain, record_type)
 
     # Network Discovery Tools
-    @mcp.tool(description="Scan network using nmap")
+    @_tool(description="Scan network using nmap")
     def nmap_scan(
         target: Annotated[str, Field(description="Target host or network")],
         ports: Annotated[Optional[str], Field(description="Port range (e.g., '22,80,443')")] = None,
@@ -184,7 +167,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.discovery_tools.nmap_scan(target, ports, scan_type, timeout)
 
-    @mcp.tool(description="Discover network services")
+    @_tool(description="Discover network services")
     def service_discovery(
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[Optional[str], Field(description="Port range")] = None,
@@ -192,25 +175,25 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return tools.discovery_tools.service_discovery(target, ports)
 
     # System Network Tools
-    @mcp.tool(description="Show network connections using ss")
+    @_tool(description="Show network connections using ss")
     def ss_connections(
         state: Annotated[Optional[str], Field(description="Connection state")] = None,
         protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None,
     ):
         return tools.network_tools.ss_connections(state, protocol)
 
-    @mcp.tool(description="Show network connections using netstat")
+    @_tool(description="Show network connections using netstat")
     def netstat_connections(
         state: Annotated[Optional[str], Field(description="Connection state")] = None,
         protocol: Annotated[Optional[str], Field(description="Protocol (tcp/udp)")] = None,
     ):
         return tools.network_tools.netstat_connections(state, protocol)
 
-    @mcp.tool(description="Show ARP table")
+    @_tool(description="Show ARP table")
     def arp_table():
         return tools.network_tools.arp_table()
 
-    @mcp.tool(description="ARP ping a host")
+    @_tool(description="ARP ping a host")
     def arping_host(
         host: Annotated[str, Field(description="Target host")],
         count: Annotated[int, Field(description="Number of packets", default=4)] = 4,
@@ -218,30 +201,30 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return tools.network_tools.arping_host(host, count)
 
     # System Monitoring Tools
-    @mcp.tool(description="Get system status")
+    @_tool(description="Get system status")
     def system_status():
         return tools.monitoring_tools.system_status()
 
-    @mcp.tool(description="Get CPU usage information")
+    @_tool(description="Get CPU usage information")
     def cpu_usage():
         return tools.monitoring_tools.cpu_usage()
 
-    @mcp.tool(description="Get memory usage information")
+    @_tool(description="Get memory usage information")
     def memory_usage():
         return tools.monitoring_tools.memory_usage()
 
-    @mcp.tool(description="Get disk usage information")
+    @_tool(description="Get disk usage information")
     def disk_usage():
         return tools.monitoring_tools.disk_usage()
 
-    @mcp.tool(description="List running processes")
+    @_tool(description="List running processes")
     def process_list(
-        limit: Annotated[int, Field(description="Number of processes to show", default=20)] = 20
+        limit: Annotated[int, Field(description="Number of processes to show", default=20)] = 20,
     ):
         return tools.monitoring_tools.process_list(limit)
 
     # Security Tools
-    @mcp.tool(description="Scan ports on a target")
+    @_tool(description="Scan ports on a target")
     def port_scan(
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[str, Field(description="Port range (e.g., '1-1000')")],
@@ -249,7 +232,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
     ):
         return tools.scanning_tools.port_scan(target, ports, timeout)
 
-    @mcp.tool(description="Enumerate services on a target")
+    @_tool(description="Enumerate services on a target")
     def service_enumeration(
         target: Annotated[str, Field(description="Target host")],
         ports: Annotated[Optional[str], Field(description="Port range")] = None,
@@ -257,7 +240,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         return tools.scanning_tools.service_enumeration(target, ports)
 
     # System Tools
-    @mcp.tool(description="Check required system tools")
+    @_tool(description="Check required system tools")
     def check_required_tools():
         # Unified body: typed Content envelope (server.py style), with the
         # HTTP server's defensive try/except so a system-check failure returns
@@ -276,7 +259,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
         except Exception as e:
             return [Content(type="text", text=json.dumps({"error": str(e)}, indent=2))]
 
-    @mcp.tool(description="Health check endpoint")
+    @_tool(description="Health check endpoint")
     def health():
         # Unified body: reports the DYNAMIC tool count (REF-05) plus startup
         # test status. `_tests_passed` is stdio-only state (None on the HTTP
@@ -292,7 +275,7 @@ def register_tools(mcp: Any, tools: Any) -> int:
                     {
                         "status": status,
                         "tests_passed": tests_passed,
-                        "mcp_tools": _registered_tool_count(mcp),
+                        "mcp_tools": len(registered),
                         "details": (
                             "Startup tests passed"
                             if tests_passed is True
@@ -307,8 +290,5 @@ def register_tools(mcp: Any, tools: Any) -> int:
             )
         ]
 
-    # REF-05: derive the count dynamically from the FastMCP instance rather
-    # than the old hardcoded literal 26. WR-03: access is wrapped defensively
-    # (see _registered_tool_count) so an SDK internals rename degrades to 0
-    # instead of crashing server construction; the CI guard test catches it.
-    return _registered_tool_count(mcp)
+    # REF-05: the count is derived from the actual registrations, not hardcoded.
+    return len(registered)

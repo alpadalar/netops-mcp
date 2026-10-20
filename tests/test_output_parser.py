@@ -8,6 +8,7 @@ introduced by plan 01-04 (BUG-01: loss 100, rtt fields None).
 """
 
 import pytest
+
 from netops_mcp.formatting.output_parser import OutputParser
 
 

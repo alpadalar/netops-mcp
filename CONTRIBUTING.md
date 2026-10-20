@@ -8,7 +8,7 @@ By participating you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md)
 
 ## Prerequisites
 
-- **Python >= 3.10** (CI runs 3.10, 3.11, and 3.12).
+- **Python >= 3.11** (CI runs 3.11, 3.12, 3.13, and 3.14).
 - **[uv](https://github.com/astral-sh/uv)** — install with
   `curl -LsSf https://astral.sh/uv/install.sh | sh`.
 - Linux/macOS only. System tools (`curl`, `ping`, `nmap`, `dig`, …) are needed
@@ -64,7 +64,7 @@ mypy src/ --ignore-missing-imports   # type check (advisory)
 ```
 
 Configuration lives in `pyproject.toml`: black and ruff use line length 100,
-target `py310`; ruff rules `E`, `F`, `B`, `I`. mypy is kept advisory because a
+target `py311`; ruff rules `E`, `F`, `B`, `I`. mypy is kept advisory because a
 set of pre-existing strict-mode findings and the MCP/FastMCP SDK are outside the
 current frozen-behavior release scope.
 

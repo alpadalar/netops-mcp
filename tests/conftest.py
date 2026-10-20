@@ -40,11 +40,12 @@ def mock_shutil_which():
 @pytest.fixture
 def mock_psutil():
     """Mock psutil for testing."""
-    with patch("psutil.cpu_percent") as mock_cpu, patch(
-        "psutil.virtual_memory"
-    ) as mock_memory, patch("psutil.disk_usage") as mock_disk, patch(
-        "psutil.process_iter"
-    ) as mock_processes:
+    with (
+        patch("psutil.cpu_percent") as mock_cpu,
+        patch("psutil.virtual_memory") as mock_memory,
+        patch("psutil.disk_usage") as mock_disk,
+        patch("psutil.process_iter") as mock_processes,
+    ):
         # Setup default mock returns
         mock_cpu.return_value = 25.5
         mock_memory.return_value = MagicMock(

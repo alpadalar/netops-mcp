@@ -23,7 +23,7 @@ server with auth, rate limiting, and metrics).
 
 ## Requirements
 
-- **Python >= 3.10** and [uv](https://github.com/astral-sh/uv) (recommended)
+- **Python >= 3.11** and [uv](https://github.com/astral-sh/uv) (recommended)
 - **Linux or macOS** — the network tools are OS-specific; Windows is not supported
 - **System tools** on `PATH` (availability is checked at startup):
   `curl`, `ping`, `traceroute`, `mtr`, `telnet`, `nc`, `nmap`, `ss`, `netstat`,

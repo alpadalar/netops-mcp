@@ -32,7 +32,7 @@ body:
     id: python_version
     attributes:
       label: Python version
-      description: Output of `python --version` (NetOpsMCP requires >= 3.10).
+      description: Output of `python --version` (NetOpsMCP requires >= 3.11).
       placeholder: "3.11.9"
     validations:
       required: true

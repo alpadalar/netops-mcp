@@ -83,34 +83,24 @@ def _build_servers() -> Tuple[Any, Any]:
         return NetOpsMCPServer(), NetOpsMCPHTTPServer()
 
 
-def _stdio_snapshot(server: Any) -> Dict[str, Dict[str, Any]]:
-    """Extract {name: {description, inputSchema}} from the SDK FastMCP (stdio) server."""
-    tools = asyncio.run(server.mcp.list_tools())  # list[mcp.types.Tool]
-    snapshot: Dict[str, Dict[str, Any]] = {
-        t.name: {"description": t.description, "inputSchema": t.inputSchema} for t in tools
-    }
+def _snapshot(server: Any) -> Dict[str, Dict[str, Any]]:
+    """Extract {name: {description, inputSchema}} from a server's FastMCP instance."""
+    tools = asyncio.run(server.mcp.list_tools())
+    snapshot: Dict[str, Dict[str, Any]] = {}
+    for tool in tools:
+        mcp_tool = tool.to_mcp_tool()
+        snapshot[tool.name] = {
+            "description": mcp_tool.description,
+            "inputSchema": mcp_tool.input_schema,
+        }
     for entry in snapshot.values():
         for prop in entry["inputSchema"].get("properties", {}).values():
             _canonicalize_anyof(prop)
     return snapshot
 
 
-def _http_snapshot(server: Any) -> Dict[str, Dict[str, Any]]:
-    """Extract {name: {description, inputSchema}} from the fastmcp 2.x (HTTP) server."""
-
-    async def _get() -> Dict[str, Any]:
-        tools = await server.mcp.get_tools()  # dict[str, FunctionTool]
-        return {name: tool.to_mcp_tool() for name, tool in tools.items()}
-
-    mcp_tools = asyncio.run(_get())
-    snapshot: Dict[str, Dict[str, Any]] = {
-        name: {"description": tool.description, "inputSchema": tool.inputSchema}
-        for name, tool in mcp_tools.items()
-    }
-    for entry in snapshot.values():
-        for prop in entry["inputSchema"].get("properties", {}).values():
-            _canonicalize_anyof(prop)
-    return snapshot
+_stdio_snapshot = _snapshot
+_http_snapshot = _snapshot
 
 
 @lru_cache(maxsize=1)

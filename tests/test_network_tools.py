@@ -5,6 +5,7 @@ Tests for NetworkTools.
 from unittest.mock import patch
 
 import pytest
+
 from netops_mcp.tools.system.network_tools import NetworkTools
 
 

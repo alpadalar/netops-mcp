@@ -9,6 +9,7 @@ after the fix.
 """
 
 import pytest
+
 from netops_mcp.validators.input_validator import (
     ValidationError,
     sanitize_command_arg,

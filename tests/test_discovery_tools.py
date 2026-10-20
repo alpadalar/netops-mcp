@@ -5,6 +5,7 @@ Tests for DiscoveryTools.
 from unittest.mock import patch
 
 import pytest
+
 from netops_mcp.config.models import Config, SecurityConfig
 from netops_mcp.tools.network.discovery_tools import DiscoveryTools
 

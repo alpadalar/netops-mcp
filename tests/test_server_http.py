@@ -1,11 +1,13 @@
 """
 Tests for the HTTP server module.
 """
+
 import re
 from unittest.mock import Mock, patch
 
 import pytest
 from fastmcp import FastMCP
+
 from netops_mcp.config.models import Config
 from netops_mcp.server_http import NetOpsMCPHTTPServer
 
@@ -85,9 +87,11 @@ class TestNetOpsMCPHTTPServer:
         # REF-07: run() now builds the served app via build_http_app() and drives
         # uvicorn.Server directly (no more self.mcp.run). Stub both so run() does
         # not bind a real port while still exercising the signal/serve path.
-        with patch.object(NetOpsMCPHTTPServer, "build_http_app") as mock_build, patch(
-            "uvicorn.Config"
-        ), patch("uvicorn.Server") as mock_uv_server:
+        with (
+            patch.object(NetOpsMCPHTTPServer, "build_http_app") as mock_build,
+            patch("uvicorn.Config"),
+            patch("uvicorn.Server") as mock_uv_server,
+        ):
             try:
                 server.run()
             except SystemExit:
@@ -177,8 +181,9 @@ class TestNetOpsMCPHTTPServer:
             mock_parser.return_value.parse_args.return_value = mock_args
 
             # Mock the server creation to avoid actually starting it
-            with patch("netops_mcp.server_http.NetOpsMCPHTTPServer") as mock_server_class, patch(
-                "netops_mcp.server_http.os.getenv", return_value=None
+            with (
+                patch("netops_mcp.server_http.NetOpsMCPHTTPServer") as mock_server_class,
+                patch("netops_mcp.server_http.os.getenv", return_value=None),
             ):
                 mock_server = Mock()
                 mock_server_class.return_value = mock_server
@@ -239,9 +244,11 @@ class TestAuthGate:
         with patch("netops_mcp.server_http.load_config", return_value=config):
             server = NetOpsMCPHTTPServer()
 
-        with patch.object(NetOpsMCPHTTPServer, "build_http_app") as mock_build, patch(
-            "uvicorn.Config"
-        ), patch("uvicorn.Server") as mock_uv_server:
+        with (
+            patch.object(NetOpsMCPHTTPServer, "build_http_app") as mock_build,
+            patch("uvicorn.Config"),
+            patch("uvicorn.Server") as mock_uv_server,
+        ):
             try:
                 server.run()
             except SystemExit:
@@ -259,9 +266,11 @@ class TestAuthGate:
         with patch("netops_mcp.server_http.load_config", return_value=config):
             server = NetOpsMCPHTTPServer()
 
-        with patch.object(NetOpsMCPHTTPServer, "build_http_app") as mock_build, patch(
-            "uvicorn.Config"
-        ), patch("uvicorn.Server") as mock_uv_server:
+        with (
+            patch.object(NetOpsMCPHTTPServer, "build_http_app") as mock_build,
+            patch("uvicorn.Config"),
+            patch("uvicorn.Server") as mock_uv_server,
+        ):
             try:
                 server.run()
             except SystemExit:
@@ -353,10 +362,9 @@ class TestPrecedence:
             mock_args.config = None
             mock_parser.return_value.parse_args.return_value = mock_args
 
-            with patch(
-                "netops_mcp.server_http.NetOpsMCPHTTPServer"
-            ) as mock_server_class, patch.dict(
-                "os.environ", {"NETOPS_MCP_CONFIG": "/env/config.json"}
+            with (
+                patch("netops_mcp.server_http.NetOpsMCPHTTPServer") as mock_server_class,
+                patch.dict("os.environ", {"NETOPS_MCP_CONFIG": "/env/config.json"}),
             ):
                 mock_server = Mock()
                 mock_server_class.return_value = mock_server

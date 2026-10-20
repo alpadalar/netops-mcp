@@ -17,12 +17,7 @@ try:
 
     FASTMCP_AVAILABLE = True
 except ImportError:
-    try:
-        from mcp.server.fastmcp import FastMCP
-
-        FASTMCP_AVAILABLE = True
-    except ImportError:
-        FASTMCP_AVAILABLE = False
+    FASTMCP_AVAILABLE = False
 
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware

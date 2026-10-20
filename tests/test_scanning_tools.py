@@ -5,6 +5,7 @@ Tests for ScanningTools.
 from unittest.mock import patch
 
 import pytest
+
 from netops_mcp.tools.security.scanning_tools import ScanningTools
 
 

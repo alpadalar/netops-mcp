@@ -1,6 +1,6 @@
 # Multi-stage build for smaller, more secure image
 # Stage 1: Builder
-FROM python:3.11-slim as builder
+FROM python:3.13-slim as builder
 
 # Set working directory
 WORKDIR /build
@@ -27,7 +27,7 @@ RUN uv venv /opt/venv && \
     uv pip install --no-cache .
 
 # Stage 2: Runtime
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Set working directory
 WORKDIR /app

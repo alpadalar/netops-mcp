@@ -10,8 +10,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-import netops_mcp.tools.network.http_tools as http_tools_module
 import pytest
+
+import netops_mcp.tools.network.http_tools as http_tools_module
 from netops_mcp.tools.network.http_tools import HTTPTools
 
 

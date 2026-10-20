@@ -194,3 +194,7 @@ get-shit-done/
 .codex/
 .cursor/
 .agents/
+
+# local scratch
+.venv.freeze.txt
+.playwright-mcp/

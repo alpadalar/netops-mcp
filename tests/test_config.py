@@ -8,9 +8,10 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
+
 from netops_mcp.config.loader import load_config
 from netops_mcp.config.models import Config, LoggingConfig, NetworkConfig, SecurityConfig
-from pydantic import ValidationError
 
 
 class TestConfigLoader:

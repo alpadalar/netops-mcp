@@ -1,12 +1,14 @@
 """
 Tests for the system check module.
 """
+
 import platform
 import subprocess
 from unittest.mock import Mock, patch
 
 import psutil
 import pytest
+
 from netops_mcp.utils.system_check import (
     _get_tool_check_command,
     check_privileged_access,

@@ -31,7 +31,7 @@ from ..utils.system_check import get_system_info
 
 
 def register_tools(mcp: Any, tools: Any) -> int:
-    """Register all 26 MCP tools on ``mcp``.
+    """Register all 30 MCP tools on ``mcp``.
 
     Args:
         mcp: A FastMCP instance (either the stdio ``mcp.server.fastmcp.FastMCP``
@@ -156,6 +156,36 @@ def register_tools(mcp: Any, tools: Any) -> int:
         record_type: Annotated[str, Field(description="DNS record type", default="A")] = "A",
     ):
         return tools.dns_tools.host_lookup(domain, record_type)
+
+    # Additional diagnostics (v1.2)
+    @_tool(description="Inspect the TLS certificate presented by a host")
+    def tls_certificate_check(
+        host: Annotated[str, Field(description="Target host")],
+        port: Annotated[int, Field(description="TLS port", default=443)] = 443,
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=10)] = 10,
+    ):
+        return tools.diagnostics_tools.tls_certificate_check(host, port, timeout)
+
+    @_tool(description="WHOIS lookup for a domain or IP address")
+    def whois_lookup(
+        query: Annotated[str, Field(description="Domain name or IP address")],
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=30)] = 30,
+    ):
+        return tools.diagnostics_tools.whois_lookup(query, timeout)
+
+    @_tool(description="Reverse DNS (PTR) lookup with forward confirmation")
+    def reverse_dns_lookup(
+        ip: Annotated[str, Field(description="IPv4 or IPv6 address")],
+        timeout: Annotated[int, Field(description="Timeout in seconds", default=5)] = 5,
+    ):
+        return tools.diagnostics_tools.reverse_dns_lookup(ip, timeout)
+
+    @_tool(description="Check MX, SPF, DMARC and optional DKIM DNS records of a domain")
+    def email_dns_check(
+        domain: Annotated[str, Field(description="Domain to check")],
+        dkim_selector: Annotated[Optional[str], Field(description="DKIM selector")] = None,
+    ):
+        return tools.diagnostics_tools.email_dns_check(domain, dkim_selector)
 
     # Network Discovery Tools
     @_tool(description="Scan network using nmap")

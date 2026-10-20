@@ -9,13 +9,13 @@ from unittest.mock import MagicMock
 from netops_mcp.tools.registry import register_tools
 
 
-def test_register_tools_returns_dynamic_count_26():
-    """REF-05: registering the shared surface yields the dynamic count 26."""
+def test_register_tools_returns_dynamic_count_30():
+    """REF-05: registering the shared surface yields the dynamic count 30."""
     from fastmcp import FastMCP
 
     mcp = FastMCP("count-probe")
     count = register_tools(mcp, MagicMock())
-    assert count == 26
+    assert count == 30
 
 
 def test_registered_tools_visible_on_fastmcp_instance():

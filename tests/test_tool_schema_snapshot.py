@@ -27,7 +27,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 STDIO_GOLDEN = FIXTURES / "tool_schemas_stdio.json"
 HTTP_GOLDEN = FIXTURES / "tool_schemas_http.json"
 
-EXPECTED_TOOL_COUNT = 26
+EXPECTED_TOOL_COUNT = 30
 
 # Fake system-check results so server constructors do not fork ~15 subprocesses.
 FAKE_TOOL_STATUS: Dict[str, Any] = {
@@ -190,7 +190,23 @@ def test_http_schema_matches_golden() -> None:
     _assert_or_update(http_snap, HTTP_GOLDEN)
 
 
-def test_both_servers_register_26_tools() -> None:
+CORE_26_TOOLS = {
+    "curl_request", "httpie_request", "api_test", "ping_host", "traceroute_path",
+    "mtr_monitor", "telnet_connect", "netcat_test", "nslookup_query", "dig_query",
+    "host_lookup", "nmap_scan", "service_discovery", "ss_connections",
+    "netstat_connections", "arp_table", "arping_host", "system_status", "cpu_usage",
+    "memory_usage", "disk_usage", "process_list", "port_scan", "service_enumeration",
+    "check_required_tools", "health",
+}  # fmt: skip
+
+
+def test_core_26_tools_still_registered() -> None:
+    """Compatibility: the original 26-tool surface (v1.0/v1.1) must never shrink."""
+    stdio_snap, _ = _snapshots()
+    assert CORE_26_TOOLS <= set(stdio_snap)
+
+
+def test_both_servers_register_all_tools() -> None:
     stdio_snap, http_snap = _snapshots()
     assert len(stdio_snap) == EXPECTED_TOOL_COUNT, sorted(stdio_snap)
     assert len(http_snap) == EXPECTED_TOOL_COUNT, sorted(http_snap)

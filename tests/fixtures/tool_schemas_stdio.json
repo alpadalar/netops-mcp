@@ -180,6 +180,34 @@
       "type": "object"
     }
   },
+  "email_dns_check": {
+    "description": "Check MX, SPF, DMARC and optional DKIM DNS records of a domain",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "dkim_selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "DKIM selector"
+        },
+        "domain": {
+          "description": "Domain to check",
+          "type": "string"
+        }
+      },
+      "required": [
+        "domain"
+      ],
+      "type": "object"
+    }
+  },
   "health": {
     "description": "Health check endpoint",
     "inputSchema": {
@@ -491,6 +519,27 @@
       "type": "object"
     }
   },
+  "reverse_dns_lookup": {
+    "description": "Reverse DNS (PTR) lookup with forward confirmation",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "ip": {
+          "description": "IPv4 or IPv6 address",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 5,
+          "description": "Timeout in seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ip"
+      ],
+      "type": "object"
+    }
+  },
   "service_discovery": {
     "description": "Discover network services",
     "inputSchema": {
@@ -614,6 +663,32 @@
       "type": "object"
     }
   },
+  "tls_certificate_check": {
+    "description": "Inspect the TLS certificate presented by a host",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "description": "Target host",
+          "type": "string"
+        },
+        "port": {
+          "default": 443,
+          "description": "TLS port",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 10,
+          "description": "Timeout in seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    }
+  },
   "traceroute_path": {
     "description": "Perform traceroute to a target",
     "inputSchema": {
@@ -636,6 +711,27 @@
       },
       "required": [
         "target"
+      ],
+      "type": "object"
+    }
+  },
+  "whois_lookup": {
+    "description": "WHOIS lookup for a domain or IP address",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "description": "Domain name or IP address",
+          "type": "string"
+        },
+        "timeout": {
+          "default": 30,
+          "description": "Timeout in seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
       ],
       "type": "object"
     }

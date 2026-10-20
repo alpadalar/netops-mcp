@@ -30,6 +30,7 @@ from .middleware.auth import AuthenticationMiddleware
 from .middleware.metrics import MetricsMiddleware, create_metrics_endpoint
 from .middleware.rate_limiter import RateLimitMiddleware
 from .tools.network.connectivity_tools import ConnectivityTools
+from .tools.network.diagnostics_tools import DiagnosticsTools
 from .tools.network.discovery_tools import DiscoveryTools
 from .tools.network.dns_tools import DNSTools
 from .tools.network.http_tools import HTTPTools
@@ -84,6 +85,7 @@ class NetOpsMCPHTTPServer:
         self.http_tools = HTTPTools(self.config)
         self.connectivity_tools = ConnectivityTools(self.config)
         self.dns_tools = DNSTools(self.config)
+        self.diagnostics_tools = DiagnosticsTools(self.config)
         self.discovery_tools = DiscoveryTools(self.config)
         self.network_tools = NetworkTools(self.config)
         self.monitoring_tools = MonitoringTools(self.config)

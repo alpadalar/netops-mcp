@@ -72,7 +72,7 @@ def test_no_key_returns_401(live_server):
 
 @pytest.mark.asyncio
 async def test_valid_key_lists_tools(live_server):
-    """A valid Bearer key completes the MCP handshake and lists all 26 tools.
+    """A valid Bearer key completes the MCP handshake and lists all 30 tools.
 
     Uses ``fastmcp.Client`` (full initialize + session negotiation) so the
     200-path success is unambiguous: auth passed AND the served app IS the real
@@ -87,7 +87,7 @@ async def test_valid_key_lists_tools(live_server):
     )
     async with Client(transport) as client:
         tools = await client.list_tools()
-    assert len(tools) == 26
+    assert len(tools) == 30
 
 
 def test_over_limit_returns_429(live_server_factory):
